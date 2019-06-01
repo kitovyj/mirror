@@ -1,5 +1,6 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="packages\openssl.1.0.1.21\build\native\openssl.props" Condition="Exists('packages\openssl.1.0.1.21\build\native\openssl.props')" />
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
       <Configuration>Debug</Configuration>
@@ -62,8 +63,8 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <SubSystem>Windows</SubSystem>
       <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
-      <AdditionalLibraryDirectories>D:\projects\freetype-windows-binaries\win32;D:\projects\agg\agg-2.4\lib\Debug;D:\vera\code\mirror\packages\nupengl.core.0.1.0.1\build\native\lib\Win32;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>kinect20.lib;%(AdditionalDependencies);agg.lib;freetype.lib</AdditionalDependencies>
+      <AdditionalLibraryDirectories>D:\vera\code\mirror\packages\curl.7.30.0.2\build\native\lib\v110\Win32\Debug\dynamic;D:\vera\code\mirror\packages\libpng.1.6.28.1\build\native\lib\Win32\v140\dynamic\Debug;D:\projects\freetype-windows-binaries\win32;D:\projects\agg\agg-2.4\lib\Debug;D:\vera\code\mirror\packages\nupengl.core.0.1.0.1\build\native\lib\Win32;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>kinect20.lib;%(AdditionalDependencies);agg.lib;freetype.lib;libpng16.lib;libcurl_debug.lib</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -86,7 +87,9 @@
     <ClCompile Include="agg_font_freetype.cpp" />
     <ClCompile Include="agg_font_win32_tt.cpp" />
     <ClCompile Include="classifier.cpp" />
+    <ClCompile Include="http-get.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="recommendation.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
@@ -95,7 +98,9 @@
     <ClInclude Include="agg_draw_text.h" />
     <ClInclude Include="button.h" />
     <ClInclude Include="classifier.h" />
+    <ClInclude Include="http-get.h" />
     <ClInclude Include="kinect-utils.h" />
+    <ClInclude Include="recommendation.h" />
     <ClInclude Include="skeleton-view.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
@@ -105,6 +110,17 @@
     <Import Project="D:\vera\code\mirror\packages\boost.1.70.0.0\build\boost.targets" Condition="Exists('D:\vera\code\mirror\packages\boost.1.70.0.0\build\boost.targets')" />
     <Import Project="D:\vera\code\mirror\packages\boost_date_time-vc141.1.70.0.0\build\boost_date_time-vc141.targets" Condition="Exists('D:\vera\code\mirror\packages\boost_date_time-vc141.1.70.0.0\build\boost_date_time-vc141.targets')" />
     <Import Project="D:\vera\code\mirror\packages\boost_regex-vc141.1.70.0.0\build\boost_regex-vc141.targets" Condition="Exists('D:\vera\code\mirror\packages\boost_regex-vc141.1.70.0.0\build\boost_regex-vc141.targets')" />
+    <Import Project="D:\vera\code\mirror\packages\libpng.redist.1.6.28.1\build\native\libpng.redist.targets" Condition="Exists('D:\vera\code\mirror\packages\libpng.redist.1.6.28.1\build\native\libpng.redist.targets')" />
+    <Import Project="D:\vera\code\mirror\packages\zlib.v120.windesktop.msvcstl.dyn.rt-dyn.1.2.8.8\build\native\zlib.v120.windesktop.msvcstl.dyn.rt-dyn.targets" Condition="Exists('D:\vera\code\mirror\packages\zlib.v120.windesktop.msvcstl.dyn.rt-dyn.1.2.8.8\build\native\zlib.v120.windesktop.msvcstl.dyn.rt-dyn.targets')" />
+    <Import Project="D:\vera\code\mirror\packages\zlib.v140.windesktop.msvcstl.dyn.rt-dyn.1.2.8.8\build\native\zlib.v140.windesktop.msvcstl.dyn.rt-dyn.targets" Condition="Exists('D:\vera\code\mirror\packages\zlib.v140.windesktop.msvcstl.dyn.rt-dyn.1.2.8.8\build\native\zlib.v140.windesktop.msvcstl.dyn.rt-dyn.targets')" />
+    <Import Project="D:\vera\code\mirror\packages\libpng.1.6.28.1\build\native\libpng.targets" Condition="Exists('D:\vera\code\mirror\packages\libpng.1.6.28.1\build\native\libpng.targets')" />
+    <Import Project="D:\vera\code\mirror\packages\zlib-msvc14-x86.1.2.11.7795\build\native\zlib-msvc14-x86.targets" Condition="Exists('D:\vera\code\mirror\packages\zlib-msvc14-x86.1.2.11.7795\build\native\zlib-msvc14-x86.targets')" />
+    <Import Project="packages\libssh2.redist.1.4.3.1\build\native\libssh2.redist.targets" Condition="Exists('packages\libssh2.redist.1.4.3.1\build\native\libssh2.redist.targets')" />
+    <Import Project="packages\openssl.redist.1.0.1.21\build\native\openssl.redist.targets" Condition="Exists('packages\openssl.redist.1.0.1.21\build\native\openssl.redist.targets')" />
+    <Import Project="packages\openssl.1.0.1.21\build\native\openssl.targets" Condition="Exists('packages\openssl.1.0.1.21\build\native\openssl.targets')" />
+    <Import Project="packages\libssh2.1.4.3.1\build\native\libssh2.targets" Condition="Exists('packages\libssh2.1.4.3.1\build\native\libssh2.targets')" />
+    <Import Project="packages\openssl-vc141-static-x86_64.1.0.2\build\native\openssl-vc141-static-x86_64.targets" Condition="Exists('packages\openssl-vc141-static-x86_64.1.0.2\build\native\openssl-vc141-static-x86_64.targets')" />
+    <Import Project="packages\curl-vc141-dynamic-x86_64.7.59.0\build\native\curl-vc141-dynamic-x86_64.targets" Condition="Exists('packages\curl-vc141-dynamic-x86_64.7.59.0\build\native\curl-vc141-dynamic-x86_64.targets')" />
   </ImportGroup>
   <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
     <PropertyGroup>
@@ -115,5 +131,17 @@
     <Error Condition="!Exists('D:\vera\code\mirror\packages\boost.1.70.0.0\build\boost.targets')" Text="$([System.String]::Format('$(ErrorText)', 'D:\vera\code\mirror\packages\boost.1.70.0.0\build\boost.targets'))" />
     <Error Condition="!Exists('D:\vera\code\mirror\packages\boost_date_time-vc141.1.70.0.0\build\boost_date_time-vc141.targets')" Text="$([System.String]::Format('$(ErrorText)', 'D:\vera\code\mirror\packages\boost_date_time-vc141.1.70.0.0\build\boost_date_time-vc141.targets'))" />
     <Error Condition="!Exists('D:\vera\code\mirror\packages\boost_regex-vc141.1.70.0.0\build\boost_regex-vc141.targets')" Text="$([System.String]::Format('$(ErrorText)', 'D:\vera\code\mirror\packages\boost_regex-vc141.1.70.0.0\build\boost_regex-vc141.targets'))" />
+    <Error Condition="!Exists('D:\vera\code\mirror\packages\libpng.redist.1.6.28.1\build\native\libpng.redist.targets')" Text="$([System.String]::Format('$(ErrorText)', 'D:\vera\code\mirror\packages\libpng.redist.1.6.28.1\build\native\libpng.redist.targets'))" />
+    <Error Condition="!Exists('D:\vera\code\mirror\packages\zlib.v120.windesktop.msvcstl.dyn.rt-dyn.1.2.8.8\build\native\zlib.v120.windesktop.msvcstl.dyn.rt-dyn.targets')" Text="$([System.String]::Format('$(ErrorText)', 'D:\vera\code\mirror\packages\zlib.v120.windesktop.msvcstl.dyn.rt-dyn.1.2.8.8\build\native\zlib.v120.windesktop.msvcstl.dyn.rt-dyn.targets'))" />
+    <Error Condition="!Exists('D:\vera\code\mirror\packages\zlib.v140.windesktop.msvcstl.dyn.rt-dyn.1.2.8.8\build\native\zlib.v140.windesktop.msvcstl.dyn.rt-dyn.targets')" Text="$([System.String]::Format('$(ErrorText)', 'D:\vera\code\mirror\packages\zlib.v140.windesktop.msvcstl.dyn.rt-dyn.1.2.8.8\build\native\zlib.v140.windesktop.msvcstl.dyn.rt-dyn.targets'))" />
+    <Error Condition="!Exists('D:\vera\code\mirror\packages\libpng.1.6.28.1\build\native\libpng.targets')" Text="$([System.String]::Format('$(ErrorText)', 'D:\vera\code\mirror\packages\libpng.1.6.28.1\build\native\libpng.targets'))" />
+    <Error Condition="!Exists('D:\vera\code\mirror\packages\zlib-msvc14-x86.1.2.11.7795\build\native\zlib-msvc14-x86.targets')" Text="$([System.String]::Format('$(ErrorText)', 'D:\vera\code\mirror\packages\zlib-msvc14-x86.1.2.11.7795\build\native\zlib-msvc14-x86.targets'))" />
+    <Error Condition="!Exists('packages\libssh2.redist.1.4.3.1\build\native\libssh2.redist.targets')" Text="$([System.String]::Format('$(ErrorText)', 'packages\libssh2.redist.1.4.3.1\build\native\libssh2.redist.targets'))" />
+    <Error Condition="!Exists('packages\openssl.redist.1.0.1.21\build\native\openssl.redist.targets')" Text="$([System.String]::Format('$(ErrorText)', 'packages\openssl.redist.1.0.1.21\build\native\openssl.redist.targets'))" />
+    <Error Condition="!Exists('packages\openssl.1.0.1.21\build\native\openssl.props')" Text="$([System.String]::Format('$(ErrorText)', 'packages\openssl.1.0.1.21\build\native\openssl.props'))" />
+    <Error Condition="!Exists('packages\openssl.1.0.1.21\build\native\openssl.targets')" Text="$([System.String]::Format('$(ErrorText)', 'packages\openssl.1.0.1.21\build\native\openssl.targets'))" />
+    <Error Condition="!Exists('packages\libssh2.1.4.3.1\build\native\libssh2.targets')" Text="$([System.String]::Format('$(ErrorText)', 'packages\libssh2.1.4.3.1\build\native\libssh2.targets'))" />
+    <Error Condition="!Exists('packages\openssl-vc141-static-x86_64.1.0.2\build\native\openssl-vc141-static-x86_64.targets')" Text="$([System.String]::Format('$(ErrorText)', 'packages\openssl-vc141-static-x86_64.1.0.2\build\native\openssl-vc141-static-x86_64.targets'))" />
+    <Error Condition="!Exists('packages\curl-vc141-dynamic-x86_64.7.59.0\build\native\curl-vc141-dynamic-x86_64.targets')" Text="$([System.String]::Format('$(ErrorText)', 'packages\curl-vc141-dynamic-x86_64.7.59.0\build\native\curl-vc141-dynamic-x86_64.targets'))" />
   </Target>
 </Project>

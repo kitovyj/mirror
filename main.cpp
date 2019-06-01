@@ -49,6 +49,7 @@
 #include "button.h"
 
 #include "classifier.h"
+#include "recommendation.h"
 
 const int bytes_per_pixel = 4;
 const int width = kinect_t::width;
@@ -60,8 +61,9 @@ float cursor_x, cursor_y;
 
 // OpenGL Variables`
 GLuint textureId;              // ID of the texture to contain Kinect RGB Data
-GLubyte data[width*height*4];  // BGRA array containing the texture data
-GLubyte data_os[width*height * 4];  // BGRA array containing the texture data
+GLubyte data[width*height * bytes_per_pixel];  // BGRA array containing the texture data
+GLubyte data_os[width*height * bytes_per_pixel];  // BGRA array containing the texture data
+GLubyte raw_frame[width*height * bytes_per_pixel];  // BGRA array containing the texture data
 
 typedef agg::pixfmt_bgra32 pixfmt;
 typedef agg::renderer_base<pixfmt> renderer_base;
@@ -85,6 +87,7 @@ void draw(void);
 void idle(void);
 
 std::mutex draw_mutex;
+std::mutex frame_mutex;
 
 std::set<std::shared_ptr<clickable_t> > clickables;
 std::set<std::shared_ptr<button_t> > buttons;
@@ -171,7 +174,14 @@ void getKinectData(GLubyte* dest) {
 
 		if (!color_frame) return;
 
-		color_frame->CopyConvertedFrameDataToArray(width*height * 4, data, ColorImageFormat_Bgra);
+		color_frame->CopyConvertedFrameDataToArray(width*height * bytes_per_pixel, data, ColorImageFormat_Bgra);
+
+		{
+			std::mutex frame_mutex;
+			std::size_t sz = width * height * bytes_per_pixel;
+			std::copy(data, data + sz, raw_frame);
+		}
+		
 		if (color_frame) color_frame->Release();
 		getBodyData(frame);
 
@@ -321,7 +331,7 @@ void drawKinectData() {
 
 	{
 
-		std::size_t sz = width * height * 4;
+		std::size_t sz = width * height * bytes_per_pixel;
 		std::copy(data, data + sz, data_os);
 		//std::fill(data_os, data_os + 100000, 255);
 
@@ -362,11 +372,63 @@ void idle() {
 }
 
 
-void on_up_my_style_clicked()
+enum state_t { s_idle, s_processing_photo };
+
+state_t state = s_idle;
+
+void up_my_style(std::vector<unsigned char>& frame)
 {
-	classify_image();
+
+	auto detection = classify_image(&frame.front(), width, height);
+	auto recommendation = get_recommendations(detection);
+
+
 }
 
+std::thread up_my_style_thread;
+
+void on_up_my_style_clicked()
+{
+
+	if (state != s_idle)
+		return;
+
+	state = s_processing_photo;
+
+	std::vector<unsigned char> fc;
+	
+	{
+		std::lock_guard<std::mutex> guard(frame_mutex);
+
+		fc = std::vector<unsigned char>(&raw_frame[0], &raw_frame[0] + width * height*bytes_per_pixel);
+	}
+
+	up_my_style_thread = std::thread(up_my_style, fc);
+
+}
+
+bool fullscreen = true;
+
+void key_pressed(unsigned char key, int x, int y) {
+	
+	if (key == 'u')
+	{
+		on_up_my_style_clicked();
+		return;
+	}
+
+	if (fullscreen)
+	{
+		glutReshapeWindow(800, 600);
+		glutPositionWindow(0, 0);
+		fullscreen = false;
+	}
+	else {
+		glutFullScreen();
+		fullscreen = false;
+	}
+
+}
 
 int main(int argc, char* argv[]) {
     
@@ -398,6 +460,10 @@ int main(int argc, char* argv[]) {
 
 	buttons.insert(b);
 	clickables.insert(b);
+	
+	glutKeyboardFunc(key_pressed);
+
+	glutFullScreen();
 
     // Main loop
 	glutMainLoop();

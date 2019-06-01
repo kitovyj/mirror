@@ -2,13 +2,43 @@
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_io.hpp>
 #include <boost/uuid/random_generator.hpp>
+#include <boost/property_tree/ptree.hpp>
+#include <boost/property_tree/json_parser.hpp>
+#include <boost/gil/extension/io/png.hpp>
+#include <boost/gil/image_view_factory.hpp>
 
 #include <iostream>
 #include <vector>
 #include <algorithm>
+#include <sstream>
 
-void classify_image()
+#include "classifier.h"
+
+template <typename T>
+std::vector<T> as_vector(boost::property_tree::ptree const& pt, boost::property_tree::ptree::key_type const& key)
 {
+	std::vector<T> r;
+	for (auto& item : pt.get_child(key))
+		r.push_back(item.second.get_value<T>());
+	return r;
+}
+
+
+items_detection_t classify_image(unsigned char* pdata, int width, int height)
+{
+
+	// https://www.kaylyn.ink/journal/using-boost-gil-to-convert-image-data/
+
+	std::stringstream out_buffer(std::ios_base::out | std::ios_base::binary);
+
+	const int bytes_per_pixels = 4;
+
+	auto view = boost::gil::interleaved_view(width, height, reinterpret_cast<const boost::gil::rgba8c_pixel_t*>(pdata), width * bytes_per_pixels);
+	
+	boost::gil::write_view(out_buffer, view, boost::gil::png_tag());
+
+	std::string str = out_buffer.str();
+	std::vector<char> data(str.begin(), str.end());
 
 	using boost::asio::ip::tcp;
 
@@ -28,8 +58,6 @@ void classify_image()
 	if (error)
 		throw boost::system::system_error(error);
 
-	std::vector<char> data(10);
-
 	std::string PREFIX = "--";
 	//Use GUID as boundary
 	std::string BOUNDARY = boost::uuids::to_string(boost::uuids::random_generator()());
@@ -39,7 +67,7 @@ void classify_image()
 	//Calculate length of entire HTTP request - goes into header
 	long long lengthOfRequest = 0;
 	lengthOfRequest += PREFIX.length() + BOUNDARY.length() + NEWLINE_LENGTH;
-	lengthOfRequest += std::string("Content-Disposition: form-data; name=\"file\"; filename=\"test.zip\"").length();
+	lengthOfRequest += std::string("Content-Disposition: form-data; name=\"file\"; filename=\"upyourstyle.png\"").length();
 	lengthOfRequest += NEWLINE_LENGTH;
 	lengthOfRequest += std::string("Content-Type: image/png").length();
 	lengthOfRequest += NEWLINE_LENGTH + NEWLINE_LENGTH;
@@ -66,7 +94,7 @@ void classify_image()
 	request_stream << PREFIX;
 	request_stream << BOUNDARY;
 	request_stream << NEWLINE;
-	request_stream << "Content-Disposition: form-data; name=\"file\"; filename=\"test.zip\"";
+	request_stream << "Content-Disposition: form-data; name=\"file\"; filename=\"upyourstyle.png\"";
 	request_stream << NEWLINE;
 	request_stream << "Content-Type: image/png";
 
@@ -129,13 +157,13 @@ void classify_image()
 	std::getline(response_stream, status_message);
 	if (!response_stream || http_version.substr(0, 5) != "HTTP/")
 	{
-		std::cout << "Invalid response\n";
-		return;
+		throw std::runtime_error("Invalid response");
 	}
 	if (status_code != 200)
 	{
-		std::cout << "Response returned with status code " << status_code << "\n";
-		return;
+		std::stringstream ss;
+		ss << "Response returned with status code " << status_code;
+		throw std::runtime_error(ss.str());
 	}
 
 	// Read the response headers, which are terminated by a blank line.
@@ -147,17 +175,65 @@ void classify_image()
 		std::cout << header << "\n";
 	std::cout << "\n";
 
+	std::stringstream ss;
+
 	// Write whatever content we already have to output.
 	if (response.size() > 0)
-		std::cout << &response;
+		ss << &response;
 
 	// Read until EOF, writing data to output as we go.
 	//boost::system::error_code error;
 	while (boost::asio::read(socket, response,
 		boost::asio::transfer_at_least(1), error))
-		std::cout << &response;
+		ss << &response;
 	if (error != boost::asio::error::eof)
 		throw boost::system::system_error(error);
+
+	boost::property_tree::ptree pt;
+	boost::property_tree::read_json(ss, pt);
+
+
+	int top_index = pt.get<int>("top_index", 0);
+	int bottom_index = pt.get<int>("bottom_index", 0);
+
+	std::vector<std::string> top_types = { "dress", "blouse", "shirt", "top", "hoodie", "sweater", "coat", "bikini" };
+	std::vector<std::string> bottom_types = { "skirt", "bikini", "coat", "dress", "jeans", "pants", "shorts", "spants" };
+	std::vector<std::string> colors = { "black", "blue", "brown", "gray", "green", "light-blue", "red", "rose", "white", "yellow" };
+
+	std::vector<float> top_colors = as_vector<float>(pt, "top_colors");
+	std::vector<float> bottom_colors = as_vector<float>(pt, "bottom_colors");
+
+
+	std::cout << ss.str();
+
+	items_detection_t id;
+
+	id.top_type = top_types[top_index];
+	id.bottom_type = bottom_types[bottom_index];
+
+	int top_color_index = std::max_element(top_colors.begin(), top_colors.end()) - top_colors.begin();
+	int bottom_color_index = std::max_element(bottom_colors.begin(), bottom_colors.end()) - bottom_colors.begin();
+
+	bool same_type = id.top_type == id.bottom_type;
+
+	if (same_type)
+	{
+
+		int color_index = bottom_color_index;
+		// whichever is more confident
+		if (bottom_colors[bottom_color_index] < top_colors[top_color_index]) {
+			color_index = top_color_index;
+		}
+
+		bottom_color_index = color_index;
+		top_color_index = color_index;
+	}
+
+	id.top_color = colors[top_color_index];
+	id.bottom_color = colors[bottom_color_index];
+
+	return id;
+
 }
 
 

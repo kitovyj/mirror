@@ -26,6 +26,12 @@
     <ClCompile Include="main.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="recommendation.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="http-get.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
@@ -44,6 +50,12 @@
       <Filter>Source Files</Filter>
     </ClInclude>
     <ClInclude Include="button.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="recommendation.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="http-get.h">
       <Filter>Source Files</Filter>
     </ClInclude>
   </ItemGroup>
