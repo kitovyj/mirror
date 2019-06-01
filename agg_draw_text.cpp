@@ -1,8 +1,9 @@
+//#include <Windows.h>
+
 #include "agg_draw_text.h"
 
-#include <Windows.h>
-
-font_engine_type m_feng(GetDC(NULL));
+//font_engine_type m_feng(GetDC(NULL));
+font_engine_type m_feng;
 font_manager_type m_fman(m_feng);
 
 // Pipeline to process the vectors glyph paths (curves + contour)

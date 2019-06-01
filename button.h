@@ -110,7 +110,7 @@ struct button_t : public clickable_t {
 			//ren.color(agg::rgba(1, 1, 1, 0.1));
 			//agg::render_scanlines_aa_solid(ras, sl, rb, agg::rgba(1.0, 1.0, 1.0, 0.1));
 			//agg::render_scanlines_aa_solid(ras, sl, rb, agg::rgba(0.0, 0.0, 0.0, 1.0));
-			agg::render_scanlines_aa_solid(ras, sl, rb, agg::rgba(1.0, 1.0, 1.0, 0.5));
+			agg::render_scanlines_aa_solid(ras, sl, rb, agg::rgba(1.0, 1.0, 1.0, 0.4));
 			//agg::render_scanlines(ras, sl, ren);
 		}
 
@@ -121,9 +121,9 @@ struct button_t : public clickable_t {
 			renderer_bin ren_bin(rb);
 
 			int x = x_pos;
-			int y = y_pos;
+			int y = y_pos + 100;
 
-			draw_text(ras, sl, ren, ren_bin, x, y, agg::rgba8(0.0, 0.0, 0.0), text.c_str());
+			draw_text(ras, sl, ren, ren_bin, x, y, agg::rgba(1.0, 1.0, 1.0, 7.0), text.c_str());
 		}
 
 

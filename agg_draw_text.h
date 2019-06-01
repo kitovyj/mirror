@@ -13,10 +13,11 @@
 #include "agg_conv_curve.h"
 #include "agg_conv_contour.h"
 #include "agg_bezier_arc.h"
-#include "agg_font_win32_tt.h"
 
-typedef agg::font_engine_win32_tt_int32 font_engine_type;
-//typedef agg::font_engine_freetype_int32 font_engine_type;
+//#include "agg_font_win32_tt.h"
+//typedef agg::font_engine_win32_tt_int32 font_engine_type;
+
+typedef agg::font_engine_freetype_int32 font_engine_type;
 typedef agg::font_cache_manager<font_engine_type> font_manager_type;
 
 extern font_engine_type m_feng;
@@ -52,8 +53,8 @@ unsigned draw_text(Rasterizer& ras, Scanline& sl,
 
 	m_contour.width(-m_weight * m_height * 0.05);
 
-	//	if (m_feng.load_font("timesi.ttf", 0, gren))
-	if (m_feng.create_font("Arial", gren))
+	if (m_feng.load_font("Chunkfive.otf", 0, gren))
+	//if (m_feng.create_font("Arial", gren))
 		//	if (m_feng.load_font("Chunkfive.otf", 0, gren))
 	{
 		m_feng.hinting(false);
@@ -66,7 +67,7 @@ unsigned draw_text(Rasterizer& ras, Scanline& sl,
 		mtx *= agg::trans_affine_rotation(agg::deg2rad(-4.0));
 		mtx *= agg::trans_affine_skewing(-0.4, 0);
 		//mtx *= agg::trans_affine_translation(1, 0);
-		m_feng.transform(mtx);
+		//m_feng.transform(mtx);
 
 		double x = pos_x;
 		double t_y = pos_y;

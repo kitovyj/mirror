@@ -59,11 +59,11 @@ kinect_t kinect;
 
 float cursor_x, cursor_y;
 
-// OpenGL Variables`
 GLuint textureId;              // ID of the texture to contain Kinect RGB Data
-GLubyte data[width*height * bytes_per_pixel];  // BGRA array containing the texture data
-GLubyte data_os[width*height * bytes_per_pixel];  // BGRA array containing the texture data
-GLubyte raw_frame[width*height * bytes_per_pixel];  // BGRA array containing the texture data
+
+std::vector<GLubyte> data(width*height * bytes_per_pixel);  // BGRA array containing the texture data
+std::vector<GLubyte> last_frame(width*height * bytes_per_pixel);  // BGRA array containing the texture data
+std::vector<GLubyte> frame(width*height * bytes_per_pixel);  // BGRA array containing the texture data
 
 typedef agg::pixfmt_bgra32 pixfmt;
 typedef agg::renderer_base<pixfmt> renderer_base;
@@ -103,7 +103,7 @@ bool init(int argc, char* argv[]) {
 }
 
 
-void getBodyData(IMultiSourceFrame* frame) {
+void get_body_data(IMultiSourceFrame* frame) {
 	IBodyFrame* bodyframe;
 	IBodyFrameReference* frameref = NULL;
 	frame->get_BodyFrameReference(&frameref);
@@ -157,151 +157,188 @@ struct hand_tip_pos_compare {
 std::vector<hand_tip_pos> hand_tip_trajectory;
 volatile bool press_detected = false;
 
-void getKinectData(GLubyte* dest) {
+void detect_press()
+{
 
-	press_detected = false;
+	Joint handLeft = joints[JointType_HandTipLeft];
+	Joint handRight = joints[JointType_HandTipRight];
+
+	if (handLeft.TrackingState == TrackingState_NotTracked || handRight.TrackingState == TrackingState_NotTracked)
+		return;
+
+	// Select the hand that is closer to the sensor.
+	Joint activeHand = handRight.Position.Z <= handLeft.Position.Z ? handRight : handLeft;
+
+	DepthSpacePoint depthPoint = { 0 };
+	kinect.mapper->MapCameraPointToDepthSpace(activeHand.Position, &depthPoint);
+
+	static const int cDepthWidth = 512;
+	static const int cDepthHeight = 424;
+
+	cursor_x = static_cast<float>(depthPoint.X * width) / cDepthWidth;
+	cursor_y = static_cast<float>(depthPoint.Y * height) / cDepthHeight;
+
+	hand_tip_pos p;
+
+	p.x = activeHand.Position.X;
+	p.y = activeHand.Position.Y;
+	p.z = activeHand.Position.Z;
+
+	p.time_point = std::chrono::steady_clock::now();
+
+	hand_tip_trajectory.push_back(p);
+
+	std::chrono::steady_clock::duration two_seconds = std::chrono::milliseconds(2000);
+	std::chrono::time_point<std::chrono::steady_clock> old_tp = p.time_point - two_seconds;
+
+	auto old = std::lower_bound(hand_tip_trajectory.begin(), hand_tip_trajectory.end(), old_tp, hand_tip_pos_compare());
+
+	hand_tip_trajectory.erase(hand_tip_trajectory.begin(), old);
+
+
+	std::chrono::steady_clock::duration jesture_duration = std::chrono::milliseconds(200);
+	std::chrono::steady_clock::duration jesture_duration_delta = std::chrono::milliseconds(200);
+
+	std::chrono::time_point<std::chrono::steady_clock> earliest = p.time_point - jesture_duration - jesture_duration_delta;
+	std::chrono::time_point<std::chrono::steady_clock> latest = p.time_point - jesture_duration + jesture_duration_delta;
+
+	auto lower = std::lower_bound(hand_tip_trajectory.begin(), hand_tip_trajectory.end(), earliest, hand_tip_pos_compare());
+	auto upper = std::lower_bound(hand_tip_trajectory.begin(), hand_tip_trajectory.end(), latest, hand_tip_pos_compare());
+
+	double min_distance = 100;
+	std::vector<hand_tip_pos>::iterator start = hand_tip_trajectory.end();
+
+
+	for (auto i = lower;i < upper;i++)
+	{
+		double d = sqrt(pow(p.x - i->x, 2) + pow(p.y - i->y, 2) + pow(p.z - i->z, 2));
+		if (d < min_distance)
+		{
+			min_distance = d;
+			start = i;
+		}
+	}
+
+	if (min_distance <= 0.02)
+	{
+
+		double max_distance = 0;
+
+		for (auto i = start;i != hand_tip_trajectory.end();i++)
+		{
+			double d = sqrt(pow(p.x - i->x, 2) + pow(p.y - i->y, 2) + pow(p.z - i->z, 2));
+			if (d > max_distance)
+			{
+				max_distance = d;
+			}
+
+		}
+
+		// in meters!
+
+		if (max_distance > 0.02)
+		{
+			press_detected = true;
+
+		}
+
+	}
+
+}
+
+bool get_kinect_data(GLubyte* dest) {
+
+	bool result = false;
 
 	//IColorFrame* frame = NULL;
 	IMultiSourceFrame* frame = NULL;
-	if (SUCCEEDED(kinect.reader->AcquireLatestFrame(&frame))) {
 
+	
+	if (SUCCEEDED(kinect.reader->AcquireLatestFrame(&frame))) {
+		
+		get_body_data(frame);
 
 		IColorFrameReference * color_frame_ref;
 		frame->get_ColorFrameReference(&color_frame_ref);
 		IColorFrame * color_frame;
 		color_frame_ref->AcquireFrame(&color_frame);
+		
 		if (color_frame_ref) color_frame_ref->Release();
 
-		if (!color_frame) return;
-
-		color_frame->CopyConvertedFrameDataToArray(width*height * bytes_per_pixel, data, ColorImageFormat_Bgra);
-
+		if (color_frame)
 		{
-			std::mutex frame_mutex;
-			std::size_t sz = width * height * bytes_per_pixel;
-			std::copy(data, data + sz, raw_frame);
+
+			color_frame->CopyConvertedFrameDataToArray(width*height * bytes_per_pixel, dest, ColorImageFormat_Bgra);
+			if (color_frame) color_frame->Release();
+			result = true;
+
 		}
 		
-		if (color_frame) color_frame->Release();
-		getBodyData(frame);
-
-		Joint handLeft = joints[JointType_HandTipLeft];
-		Joint handRight = joints[JointType_HandTipRight];
-
-		if (handLeft.TrackingState != TrackingState_NotTracked && handRight.TrackingState != TrackingState_NotTracked)
-		{
-			// Select the hand that is closer to the sensor.
-			Joint activeHand = handRight.Position.Z <= handLeft.Position.Z ? handRight : handLeft;
-
-			DepthSpacePoint depthPoint = { 0 };
-			kinect.mapper->MapCameraPointToDepthSpace(activeHand.Position, &depthPoint);
-
-			static const int        cDepthWidth = 512;
-			static const int        cDepthHeight = 424;
-
-			cursor_x = static_cast<float>(depthPoint.X * width) / cDepthWidth;
-			cursor_y = static_cast<float>(depthPoint.Y * height) / cDepthHeight;
-
-			hand_tip_pos p;
-
-			p.x = activeHand.Position.X;
-			p.y = activeHand.Position.Y;
-			p.z = activeHand.Position.Z;
-
-			p.time_point = std::chrono::steady_clock::now();
-
-
-			hand_tip_trajectory.push_back(p);
-
-			std::chrono::steady_clock::duration two_seconds = std::chrono::milliseconds(2000);
-			std::chrono::time_point<std::chrono::steady_clock> old_tp = p.time_point - two_seconds;
-
-			auto old = std::lower_bound(hand_tip_trajectory.begin(), hand_tip_trajectory.end(), old_tp, hand_tip_pos_compare());
-
-			hand_tip_trajectory.erase(hand_tip_trajectory.begin(), old);
-
-
-			std::chrono::steady_clock::duration jesture_duration = std::chrono::milliseconds(200);
-			std::chrono::steady_clock::duration jesture_duration_delta = std::chrono::milliseconds(200);
-
-			std::chrono::time_point<std::chrono::steady_clock> earliest = p.time_point - jesture_duration - jesture_duration_delta;
-			std::chrono::time_point<std::chrono::steady_clock> latest = p.time_point - jesture_duration + jesture_duration_delta;
-
-			auto lower = std::lower_bound(hand_tip_trajectory.begin(), hand_tip_trajectory.end(), earliest, hand_tip_pos_compare());
-			auto upper = std::lower_bound(hand_tip_trajectory.begin(), hand_tip_trajectory.end(), latest, hand_tip_pos_compare());
-
-			double min_distance = 100;
-			std::vector<hand_tip_pos>::iterator start = hand_tip_trajectory.end();
-
-
-			for (auto i = lower;i < upper;i++)
-			{
-				double d = sqrt(pow(p.x - i->x, 2) + pow(p.y - i->y, 2) + pow(p.z - i->z, 2));
-				if (d < min_distance)
-				{
-					min_distance = d;
-					start = i;
-				}
-			}
-
-			if (min_distance <= 0.02)
-			{
-
-				double max_distance = 0;
-
-				for (auto i = start;i != hand_tip_trajectory.end();i++)
-				{
-					double d = sqrt(pow(p.x - i->x, 2) + pow(p.y - i->y, 2) + pow(p.z - i->z, 2));
-					if (d > max_distance)
-					{
-						max_distance = d;
-					}
-
-				}
-
-				// in meters!
-
-				if (max_distance > 0.02)
-				{
-					press_detected = true;
-
-				}
-
-			}
-
-			//cursor.Flip(activeHand);
-			//cursor.Update(position);
-		}
 
 	}
-
-	if (press_detected)
-	{
-
-		for (auto &c : clickables) {
-			bool r = c->check_click(cursor_x, cursor_y);
-			if (r)
-				break;
-		}
-
-
-	}
-
-
+	
     if (frame) frame->Release();
+
+	return result;
 }
 
 
 
-void drawKinectData() {
-    getKinectData(data);
-	
+void draw_kinect_data() {
+
+	press_detected = false;
+
+	//std::size_t sz = width * height * bytes_per_pixel;
+	//std::fill(data_kinect, data_kinect + sz, 255);
+	bool r = get_kinect_data(&frame.front());
+	//bool r = true;
+
+	/*
+	for (int i = 0;i < sz/4;i++)
+	{
+		//((uint32_t*)data_kinect)[i] &= 0x00000000;
+		((uint32_t*)data_kinect)[i] = 0x00000000;
+	}
+
+	*/
+
+	if (r)
+
+	{
+		
+		std::copy(frame.begin(), frame.end(), data.begin());
+
+		{
+			std::mutex frame_mutex;
+			std::copy(frame.begin(), frame.end(), last_frame.begin());
+		}
+		
+		
+		detect_press();
+
+		if (press_detected)
+		{
+
+			for (auto &c : clickables) {
+				bool r = c->check_click(cursor_x, cursor_y);
+				if (r)
+					break;
+			}
+
+		}
+		
+	}
+	else
+
+	{
+		std::copy(last_frame.begin(), last_frame.end(), data.begin());
+	}
+
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-	if (tracked != 0)
-		seleleton_view.draw(&joints[0]);
+	//if (tracked != 0)
+	//	seleleton_view.draw(&joints[0]);
 
-	std::size_t sz = width * height * 4;
 	//std::copy(data, data + sz, data_os);
 	//std::fill(data, data + sz, 0);
 
@@ -331,8 +368,15 @@ void drawKinectData() {
 
 	{
 
-		std::size_t sz = width * height * bytes_per_pixel;
-		std::copy(data, data + sz, data_os);
+
+		/*
+		for (int i = 0;i < sz / 4;i++)
+		{
+			//((uint32_t*)data_kinect)[i] &= 0x00000000;
+			((uint32_t*)data_os)[i] &= 0x00ff0000;
+		}
+		*/
+
 		//std::fill(data_os, data_os + 100000, 255);
 
 		//glClearColor(0.0, 0.0, 0.0, 0.0);
@@ -341,7 +385,7 @@ void drawKinectData() {
 		glBindTexture(GL_TEXTURE_2D, textureId);
 
 
-		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_BGRA_EXT, GL_UNSIGNED_BYTE, (GLvoid*)data_os);
+		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_BGRA_EXT, GL_UNSIGNED_BYTE, (GLvoid*)&data[0]);
 
 
 
@@ -363,7 +407,7 @@ void drawKinectData() {
 
 void draw() {
    std::lock_guard<std::mutex> guard(draw_mutex);
-   drawKinectData();
+   draw_kinect_data();
    glutSwapBuffers();
 }
 
@@ -400,7 +444,7 @@ void on_up_my_style_clicked()
 	{
 		std::lock_guard<std::mutex> guard(frame_mutex);
 
-		fc = std::vector<unsigned char>(&raw_frame[0], &raw_frame[0] + width * height*bytes_per_pixel);
+		fc = std::vector<unsigned char>(last_frame.begin(), last_frame.end());
 	}
 
 	up_my_style_thread = std::thread(up_my_style, fc);
@@ -425,7 +469,7 @@ void key_pressed(unsigned char key, int x, int y) {
 	}
 	else {
 		glutFullScreen();
-		fullscreen = false;
+		fullscreen = true;
 	}
 
 }
@@ -439,7 +483,7 @@ int main(int argc, char* argv[]) {
     glBindTexture(GL_TEXTURE_2D, textureId);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_BGRA_EXT, GL_UNSIGNED_BYTE, (GLvoid*) data_os);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_BGRA_EXT, GL_UNSIGNED_BYTE, (GLvoid*) &data.front());
     glBindTexture(GL_TEXTURE_2D, 0);
 
     // OpenGL setup
