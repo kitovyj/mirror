@@ -46,6 +46,7 @@ std::string http_downloader_t::download(const std::string& url) {
 	if (res != CURLE_OK) {
 		fprintf(stderr, "curl_easy_perform() failed: %s\n",
 			curl_easy_strerror(res));
+		return "";
 	}
 	return out.str();
 

@@ -33,7 +33,7 @@ items_detection_t classify_image(unsigned char* pdata, int width, int height)
 
 	const int bytes_per_pixels = 4;
 
-	auto view = boost::gil::interleaved_view(width, height, reinterpret_cast<const boost::gil::rgba8c_pixel_t*>(pdata), width * bytes_per_pixels);
+	auto view = boost::gil::interleaved_view(width, height, reinterpret_cast<const boost::gil::bgra8c_pixel_t*>(pdata), width * bytes_per_pixels);
 	
 	boost::gil::write_view(out_buffer, view, boost::gil::png_tag());
 
@@ -197,7 +197,7 @@ items_detection_t classify_image(unsigned char* pdata, int width, int height)
 	int bottom_index = pt.get<int>("bottom_index", 0);
 
 	std::vector<std::string> top_types = { "dress", "blouse", "shirt", "top", "hoodie", "sweater", "coat", "bikini" };
-	std::vector<std::string> bottom_types = { "skirt", "bikini", "coat", "dress", "jeans", "pants", "shorts", "spants" };
+	std::vector<std::string> bottom_types = { "skirt", "bikini", "coat", "dress", "jeans", "pants", "shorts", "sport%20pants" };
 	std::vector<std::string> colors = { "black", "blue", "brown", "gray", "green", "light-blue", "red", "rose", "white", "yellow" };
 
 	std::vector<float> top_colors = as_vector<float>(pt, "top_colors");

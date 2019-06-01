@@ -47,6 +47,7 @@
 #include "kinect-utils.h"
 #include "skeleton-view.h"
 #include "button.h"
+#include "product-button.h"
 
 #include "classifier.h"
 #include "recommendation.h"
@@ -89,8 +90,21 @@ void idle(void);
 std::mutex draw_mutex;
 std::mutex frame_mutex;
 
+std::mutex gui_mutex;
+
+
 std::set<std::shared_ptr<clickable_t> > clickables;
 std::set<std::shared_ptr<button_t> > buttons;
+
+std::shared_ptr<button_t> button_next;
+std::shared_ptr<button_t> button_prev;
+
+std::vector<std::shared_ptr<product_button_t>> product_buttons;
+
+enum state_t { s_idle, s_processing_photo, s_recommendations_view };
+
+volatile state_t state = s_idle;
+
 
 bool init(int argc, char* argv[]) {
     glutInit(&argc, argv);
@@ -282,25 +296,13 @@ bool get_kinect_data(GLubyte* dest) {
 	return result;
 }
 
-
+std::chrono::time_point<std::chrono::steady_clock> processing_photo_start;
 
 void draw_kinect_data() {
 
 	press_detected = false;
 
-	//std::size_t sz = width * height * bytes_per_pixel;
-	//std::fill(data_kinect, data_kinect + sz, 255);
 	bool r = get_kinect_data(&frame.front());
-	//bool r = true;
-
-	/*
-	for (int i = 0;i < sz/4;i++)
-	{
-		//((uint32_t*)data_kinect)[i] &= 0x00000000;
-		((uint32_t*)data_kinect)[i] = 0x00000000;
-	}
-
-	*/
 
 	if (r)
 
@@ -309,7 +311,7 @@ void draw_kinect_data() {
 		std::copy(frame.begin(), frame.end(), data.begin());
 
 		{
-			std::mutex frame_mutex;
+			std::lock_guard<std::mutex> guard(frame_mutex);
 			std::copy(frame.begin(), frame.end(), last_frame.begin());
 		}
 		
@@ -318,6 +320,7 @@ void draw_kinect_data() {
 
 		if (press_detected)
 		{
+			std::lock_guard<std::mutex> guard(gui_mutex);
 
 			for (auto &c : clickables) {
 				bool r = c->check_click(cursor_x, cursor_y);
@@ -336,26 +339,27 @@ void draw_kinect_data() {
 
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-	//if (tracked != 0)
-	//	seleleton_view.draw(&joints[0]);
+	if(tracked != 0)
+		seleleton_view.draw(&joints[0]);
 
-	//std::copy(data, data + sz, data_os);
-	//std::fill(data, data + sz, 0);
+	{
+		std::lock_guard<std::mutex> guard(gui_mutex);
 
-	for (auto &b : buttons) {
-		b->draw(rb);
+		for (auto &b : buttons) {
+			b->check_highlighted(cursor_x, cursor_y);
+			b->draw(rb);
+		}
 	}
-
 
 	{
 
 		agg::ellipse ell;
 		int r = 30;
-		auto color = agg::rgba(0.0, 1.0, 0.0, 0.1);
+		auto color = agg::rgba(0.0, 1.0, 0.0, 0.5);
 		if (press_detected)
 		{
 			r = 50;
-			color = agg::rgba(1.0, 0.0, 0.0, 1.0);
+			color = agg::rgba(1.0, 0.0, 0.0, 7.0);
 		}
 
 		ell.init(cursor_x, cursor_y, r, r, 50);
@@ -365,19 +369,52 @@ void draw_kinect_data() {
 		agg::render_scanlines_aa_solid(ras, sl, rb, color);
 	}
 
+	if (state == s_processing_photo)
+	{
+
+		auto passed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - processing_photo_start);
+
+		agg::rasterizer_scanline_aa<> ras;
+		agg::scanline_p8 sl;
+
+		double al = 3.14 / 2;
+		double ar = 300;
+
+		double as = passed_ms.count() * 0.01;
+
+		auto arc = agg::arc(width/2, height/2, ar, ar, as, as + al);
+
+		agg::conv_stroke<agg::arc> p(arc);
+		p.width(30.0);
+		ras.add_path(p);
+
+		auto color = agg::rgba(1.0, 1.0, 1.0, 0.8);
+		agg::render_scanlines_aa_solid(ras, sl, rb, color);
+		
+		if ((passed_ms.count() / 300) % 2 == 0)
+		{
+
+			ras.reset();
+
+			renderer_solid ren(rb);
+			renderer_bin ren_bin(rb);
+
+			std::string text = "Styling you up...";
+			int text_height = 42;
+
+			auto sz = text_size(ras, sl, ren, ren_bin, text.c_str(), text_height);
+
+			int x = width / 2 - sz.first / 2;
+			int y = height / 2 - sz.second / 2;
+
+			draw_text(ras, sl, ren, ren_bin, x, y, agg::rgba(1.0, 1.0, 1.0, 7.0), text.c_str(), text_height);
+
+		}
+
+	}
 
 	{
 
-
-		/*
-		for (int i = 0;i < sz / 4;i++)
-		{
-			//((uint32_t*)data_kinect)[i] &= 0x00000000;
-			((uint32_t*)data_os)[i] &= 0x00ff0000;
-		}
-		*/
-
-		//std::fill(data_os, data_os + 100000, 255);
 
 		//glClearColor(0.0, 0.0, 0.0, 0.0);
 		//glClearDepth(10.0);
@@ -415,10 +452,12 @@ void idle() {
 	glutPostRedisplay();
 }
 
+void on_product_clicked()
+{
 
-enum state_t { s_idle, s_processing_photo };
 
-state_t state = s_idle;
+}
+
 
 void up_my_style(std::vector<unsigned char>& frame)
 {
@@ -426,6 +465,44 @@ void up_my_style(std::vector<unsigned char>& frame)
 	auto detection = classify_image(&frame.front(), width, height);
 	auto recommendation = get_recommendations(detection);
 
+	{
+		std::vector<std::shared_ptr<product_button_t>> new_product_buttons;
+		
+		auto ri = recommendation.items.begin();
+
+		for (int i = 0;i < 4;i++)
+			for (int j = 0;j < 2 && ri != recommendation.items.end();j++, ri++)
+			{
+				float w = 0.085;
+				float r = 1920. / 1080;
+				float hs = 0.01;
+				float vs = 0.08;
+				float x = 0.3 + i * (w + hs);
+				float y = 0.67 + j * (w + vs);
+
+				auto pb = std::make_shared<product_button_t>(x, y, w, 1.0, &on_product_clicked, ri->picture_url);
+
+				new_product_buttons.push_back(pb);
+
+			}
+
+		std::lock_guard<std::mutex> guard(gui_mutex);
+		state = s_recommendations_view;
+		buttons.insert(button_prev);
+		buttons.insert(button_next);
+		for (auto& pb : product_buttons) {
+			buttons.erase(pb);
+			clickables.erase(pb);
+		}
+
+		buttons.insert(new_product_buttons.begin(), new_product_buttons.end());
+		clickables.insert(button_prev);
+		clickables.insert(button_next);
+		clickables.insert(new_product_buttons.begin(), new_product_buttons.end());
+
+		product_buttons = new_product_buttons;
+
+	}
 
 }
 
@@ -434,7 +511,7 @@ std::thread up_my_style_thread;
 void on_up_my_style_clicked()
 {
 
-	if (state != s_idle)
+	if (state == s_processing_photo)
 		return;
 
 	state = s_processing_photo;
@@ -447,8 +524,19 @@ void on_up_my_style_clicked()
 		fc = std::vector<unsigned char>(last_frame.begin(), last_frame.end());
 	}
 
+	processing_photo_start = std::chrono::steady_clock::now();
+	if (up_my_style_thread.joinable())
+		up_my_style_thread.join();
 	up_my_style_thread = std::thread(up_my_style, fc);
 
+}
+
+void on_prev_clicked()
+{
+}
+
+void on_next_clicked()
+{
 }
 
 bool fullscreen = true;
@@ -504,7 +592,10 @@ int main(int argc, char* argv[]) {
 
 	buttons.insert(b);
 	clickables.insert(b);
-	
+
+	button_prev = std::make_shared<button_t>(0.3, 0.55, 0.18, 3.0, &on_prev_clicked, "Back");
+	button_next = std::make_shared<button_t>(0.5, 0.55, 0.175, 3.0, &on_next_clicked, "Next");
+
 	glutKeyboardFunc(key_pressed);
 
 	glutFullScreen();

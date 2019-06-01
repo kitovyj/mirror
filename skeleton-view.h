@@ -66,6 +66,27 @@ struct skeleton_view_t
 		return sp;
 	}
 
+	void draw_joints(const std::vector<int>& joints_to_draw, Joint* joints, agg::path_storage& path, agg::rasterizer_scanline_aa<>& ras)
+	{
+		bool first = true;
+		for(auto j : joints_to_draw)
+		{
+			if (joints[j].TrackingState == TrackingState_NotTracked) return;
+			auto jp = joint_view_pos(joints[j]);
+			if (first)
+			{
+				path.move_to(jp.first, jp.second);
+				first = false;
+			} else
+				path.line_to(jp.first, jp.second);
+
+			int er = 3;
+			ras.add_path(agg::ellipse(jp.first, jp.second, er, er, 50));
+
+		}
+
+	}
+
 	void draw(Joint* joints)
 	{
 		ren_base.clear(agg::rgba8(0, 0, 0, 0));
@@ -76,106 +97,29 @@ struct skeleton_view_t
 		auto lh = joint_view_pos(joints[JointType_WristLeft]);
 		auto le = joint_view_pos(joints[JointType_ElbowLeft]);
 		auto ls = joint_view_pos(joints[JointType_ShoulderLeft]);
-
-		auto rth = joint_view_pos(joints[JointType_ThumbRight]);
-		auto r = joint_view_pos(joints[JointType_HandRight]);
-		auto rt = joint_view_pos(joints[JointType_HandTipRight]);
-		auto rh = joint_view_pos(joints[JointType_WristRight]);
-		auto re = joint_view_pos(joints[JointType_ElbowRight]);
-		auto rs = joint_view_pos(joints[JointType_ShoulderRight]);
-
-		auto head = joint_view_pos(joints[JointType_Head]);
-		auto neck = joint_view_pos(joints[JointType_Neck]);
-		auto spine_shoulder = joint_view_pos(joints[JointType_SpineShoulder]);
-		auto spine_mid = joint_view_pos(joints[JointType_SpineMid]);
-		auto spine_base = joint_view_pos(joints[JointType_SpineBase]);
-
-		auto hip_l = joint_view_pos(joints[JointType_HipLeft]);
-		auto knee_l = joint_view_pos(joints[JointType_KneeLeft]);
-		auto ankle_l = joint_view_pos(joints[JointType_AnkleLeft]);
-		auto foot_l = joint_view_pos(joints[JointType_FootLeft]);
-
-		auto hip_r = joint_view_pos(joints[JointType_HipRight]);
-		auto knee_r = joint_view_pos(joints[JointType_KneeRight]);
-		auto ankle_r = joint_view_pos(joints[JointType_AnkleRight]);
-		auto foot_r = joint_view_pos(joints[JointType_FootRight]);
-
-		/*
-		TrackingState_NotTracked = 0,
-		TrackingState_Inferred = 1,
-		TrackingState_Tracked = 2
-		*/
-
+		
 		agg::rasterizer_scanline_aa<> ras;
 		agg::scanline_p8 sl;
-
 		agg::path_storage path;
 
-		path.move_to(lt.first, lt.second);
-		path.line_to(l.first, l.second);
-		path.line_to(lh.first, lh.second);
-		path.line_to(le.first, le.second);
-		path.line_to(ls.first, ls.second);
 
-		path.move_to(lth.first, lth.second);
-		path.line_to(lh.first, lh.second);
+		draw_joints({ JointType_ShoulderLeft, JointType_ElbowLeft, JointType_WristLeft, JointType_HandLeft, JointType_HandTipLeft }, joints, path, ras);
+		draw_joints({ JointType_ThumbLeft, JointType_HandLeft }, joints, path, ras);
 
-		path.move_to(rt.first, rt.second);
-		path.line_to(r.first, r.second);
-		path.line_to(rh.first, rh.second);
-		path.line_to(re.first, re.second);
-		path.line_to(rs.first, rs.second);
+		draw_joints({ JointType_ShoulderRight, JointType_ElbowRight, JointType_WristRight, JointType_HandRight, JointType_HandTipRight }, joints, path, ras);
+		draw_joints({ JointType_ThumbRight, JointType_HandRight }, joints, path, ras);
 
-		path.move_to(rth.first, rth.second);
-		path.line_to(rh.first, rh.second);
+		draw_joints({ JointType_Neck, JointType_Head }, joints, path, ras);
 
-		path.move_to(head.first, head.second);
-		path.line_to(neck.first, neck.second);
-		path.line_to(spine_shoulder.first, spine_shoulder.second);
-		path.line_to(spine_mid.first, spine_mid.second);
+		draw_joints({ JointType_Neck, JointType_SpineShoulder, JointType_SpineMid, JointType_SpineBase }, joints, path, ras);
 
-		path.line_to(spine_base.first, spine_base.second);
+		draw_joints({ JointType_ShoulderLeft, JointType_SpineShoulder, JointType_ShoulderRight }, joints, path, ras);
 
-		// shoulders
+		draw_joints({ JointType_HipLeft, JointType_SpineBase, JointType_HipRight }, joints, path, ras);
 
-		path.move_to(ls.first, ls.second);
-		path.line_to(spine_shoulder.first, spine_shoulder.second);
-		path.line_to(rs.first, rs.second);
+		draw_joints({ JointType_HipLeft, JointType_KneeLeft, JointType_AnkleLeft, JointType_FootLeft }, joints, path, ras);
+		draw_joints({ JointType_HipRight, JointType_KneeRight, JointType_AnkleRight, JointType_FootRight }, joints, path, ras);
 
-		// hips
-
-		path.move_to(hip_l.first, hip_l.second);
-		path.line_to(spine_base.first, spine_base.second);
-		path.line_to(hip_r.first, hip_r.second);
-
-		// left leg
-
-		path.move_to(hip_l.first, hip_l.second);
-
-		if (joints[JointType_KneeLeft].TrackingState != TrackingState_NotTracked)
-		{
-			path.line_to(knee_l.first, knee_l.second);
-			if (joints[JointType_AnkleLeft].TrackingState != TrackingState_NotTracked)
-			{
-				path.line_to(ankle_l.first, ankle_l.second);
-				if (joints[JointType_FootLeft].TrackingState != TrackingState_NotTracked)
-					path.line_to(foot_l.first, foot_l.second);
-			}
-		}
-
-		// right leg
-
-		path.move_to(hip_r.first, hip_r.second);
-		if (joints[JointType_KneeRight].TrackingState != TrackingState_NotTracked)
-		{
-			path.line_to(knee_r.first, knee_r.second);
-			if (joints[JointType_AnkleRight].TrackingState != TrackingState_NotTracked)
-			{
-				path.line_to(ankle_r.first, ankle_r.second);
-				if (joints[JointType_FootRight].TrackingState != TrackingState_NotTracked)
-					path.line_to(foot_r.first, foot_r.second);
-			}
-		}
 		agg::conv_stroke<agg::path_storage> stroke(path);
 		//stroke.line_join(join);
 		//stroke.line_cap(cap);
@@ -184,63 +128,6 @@ struct skeleton_view_t
 		ras.add_path(stroke);
 
 		agg::render_scanlines_aa_solid(ras, sl, ren_base, agg::rgba8(50, 255, 50, 255));
-
-		ras.reset();
-
-		int er = 3;
-
-		ras.add_path(agg::ellipse(lt.first, lt.second, er, er, 50));
-		ras.add_path(agg::ellipse(l.first, l.second, er, er, 50));
-		ras.add_path(agg::ellipse(lh.first, lh.second, er, er, 50));
-		ras.add_path(agg::ellipse(le.first, le.second, er, er, 50));
-		ras.add_path(agg::ellipse(ls.first, ls.second, er, er, 50));
-
-		ras.add_path(agg::ellipse(rt.first, rt.second, er, er, 50));
-		ras.add_path(agg::ellipse(r.first, r.second, er, er, 50));
-		ras.add_path(agg::ellipse(rh.first, rh.second, er, er, 50));
-		ras.add_path(agg::ellipse(re.first, re.second, er, er, 50));
-		ras.add_path(agg::ellipse(rs.first, rs.second, er, er, 50));
-
-		agg::render_scanlines_aa_solid(ras, sl, ren_base, agg::rgba8(150, 255, 150, 255));
-
-		/*
-		agg::renderer_primitives<renderer_base> ren(ren_base);
-
-		typedef agg::rasterizer_outline<agg::renderer_primitives<renderer_base> > outline_rasterizer;
-		//outline_rasterizer ras(ren);
-		agg::rasterizer_scanline_aa<> ras;
-
-
-		ren.line_color(agg::srgba8(255, 255, 255, 255));
-
-		ren.move_to(lh.first, lh.second);
-		ren.line_to(le.first, le.second);
-		ren.line_to(ls.first, ls.second);
-
-		ren.move_to(rh.first, rh.second);
-		ren.line_to(re.first, re.second);
-		ren.line_to(rs.first, rs.second);
-
-		agg::render_scanlines(ras, sl, ren);
-		*/
-
-		/*
-		glDisableClientState(GL_VERTEX_ARRAY);
-		glDisableClientState(GL_COLOR_ARRAY);
-
-		glBegin(GL_LINES);
-		glColor3f(1.f, 0.f, 0.f);
-		glVertex3f(lh.X, lh.Y, lh.Z);
-		glVertex3f(le.X, le.Y, le.Z);
-		glVertex3f(le.X, le.Y, le.Z);
-		glVertex3f(ls.X, ls.Y, ls.Z);
-		glVertex3f(rh.X, rh.Y, rh.Z);
-		glVertex3f(re.X, re.Y, re.Z);
-		glVertex3f(re.X, re.Y, re.Z);
-		glVertex3f(rs.X, rs.Y, rs.Z);
-		glEnd();
-		*/
-
 
 	}
 

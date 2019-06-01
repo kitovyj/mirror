@@ -63,8 +63,8 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <SubSystem>Windows</SubSystem>
       <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
-      <AdditionalLibraryDirectories>D:\vera\code\mirror\packages\curl.7.30.0.2\build\native\lib\v110\Win32\Debug\dynamic;D:\vera\code\mirror\packages\libpng.1.6.28.1\build\native\lib\Win32\v140\dynamic\Debug;D:\projects\freetype-windows-binaries\win32;D:\projects\agg\agg-2.4\lib\Debug;D:\vera\code\mirror\packages\nupengl.core.0.1.0.1\build\native\lib\Win32;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>kinect20.lib;%(AdditionalDependencies);agg.lib;freetype.lib;libpng16.lib;libcurl_debug.lib</AdditionalDependencies>
+      <AdditionalLibraryDirectories>D:\vera\code\mirror\packages\libjpeg.9.2.0.1\build\native\lib\v140\Win32\Debug\static\cdecl;D:\vera\code\mirror\packages\curl.7.30.0.2\build\native\lib\v110\Win32\Debug\dynamic;D:\vera\code\mirror\packages\libpng.1.6.28.1\build\native\lib\Win32\v140\dynamic\Debug;D:\projects\freetype-windows-binaries\win32;D:\projects\agg\agg-2.4\lib\Debug;D:\vera\code\mirror\packages\nupengl.core.0.1.0.1\build\native\lib\Win32;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>kinect20.lib;%(AdditionalDependencies);agg.lib;freetype.lib;libpng16.lib;libcurl_debug.lib;jpeg.lib</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -100,6 +100,7 @@
     <ClInclude Include="classifier.h" />
     <ClInclude Include="http-get.h" />
     <ClInclude Include="kinect-utils.h" />
+    <ClInclude Include="product-button.h" />
     <ClInclude Include="recommendation.h" />
     <ClInclude Include="skeleton-view.h" />
   </ItemGroup>
@@ -121,6 +122,8 @@
     <Import Project="packages\libssh2.1.4.3.1\build\native\libssh2.targets" Condition="Exists('packages\libssh2.1.4.3.1\build\native\libssh2.targets')" />
     <Import Project="packages\openssl-vc141-static-x86_64.1.0.2\build\native\openssl-vc141-static-x86_64.targets" Condition="Exists('packages\openssl-vc141-static-x86_64.1.0.2\build\native\openssl-vc141-static-x86_64.targets')" />
     <Import Project="packages\curl-vc141-dynamic-x86_64.7.59.0\build\native\curl-vc141-dynamic-x86_64.targets" Condition="Exists('packages\curl-vc141-dynamic-x86_64.7.59.0\build\native\curl-vc141-dynamic-x86_64.targets')" />
+    <Import Project="packages\libjpeg.redist.9.2.0.1\build\native\libjpeg.redist.targets" Condition="Exists('packages\libjpeg.redist.9.2.0.1\build\native\libjpeg.redist.targets')" />
+    <Import Project="packages\libjpeg.9.2.0.1\build\native\libjpeg.targets" Condition="Exists('packages\libjpeg.9.2.0.1\build\native\libjpeg.targets')" />
   </ImportGroup>
   <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
     <PropertyGroup>
@@ -143,5 +146,7 @@
     <Error Condition="!Exists('packages\libssh2.1.4.3.1\build\native\libssh2.targets')" Text="$([System.String]::Format('$(ErrorText)', 'packages\libssh2.1.4.3.1\build\native\libssh2.targets'))" />
     <Error Condition="!Exists('packages\openssl-vc141-static-x86_64.1.0.2\build\native\openssl-vc141-static-x86_64.targets')" Text="$([System.String]::Format('$(ErrorText)', 'packages\openssl-vc141-static-x86_64.1.0.2\build\native\openssl-vc141-static-x86_64.targets'))" />
     <Error Condition="!Exists('packages\curl-vc141-dynamic-x86_64.7.59.0\build\native\curl-vc141-dynamic-x86_64.targets')" Text="$([System.String]::Format('$(ErrorText)', 'packages\curl-vc141-dynamic-x86_64.7.59.0\build\native\curl-vc141-dynamic-x86_64.targets'))" />
+    <Error Condition="!Exists('packages\libjpeg.redist.9.2.0.1\build\native\libjpeg.redist.targets')" Text="$([System.String]::Format('$(ErrorText)', 'packages\libjpeg.redist.9.2.0.1\build\native\libjpeg.redist.targets'))" />
+    <Error Condition="!Exists('packages\libjpeg.9.2.0.1\build\native\libjpeg.targets')" Text="$([System.String]::Format('$(ErrorText)', 'packages\libjpeg.9.2.0.1\build\native\libjpeg.targets'))" />
   </Target>
 </Project>
