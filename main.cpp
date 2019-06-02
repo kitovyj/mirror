@@ -59,6 +59,7 @@ const int height = kinect_t::height;
 kinect_t kinect;
 
 float cursor_x, cursor_y;
+float hand_tip_x, hand_tip_y;
 
 GLuint textureId;              // ID of the texture to contain Kinect RGB Data
 
@@ -168,6 +169,71 @@ struct hand_tip_pos_compare {
 
 };
 
+float Scale(int maxPixel, float maxSkeleton, float position)
+{
+	float value = ((((maxPixel / maxSkeleton) / 2) * position) + (maxPixel / 2));
+	if (value > maxPixel)
+		return maxPixel;
+	if (value < 0)
+		return 0;
+	return value;
+}
+
+Joint ScaleTo(Joint joint, int width, int height, float skeletonMaxX = 1.0, float skeletonMaxY = 1.0)
+{
+	Joint r = joint;
+
+	r.Position.X = Scale(width, skeletonMaxX, joint.Position.X);
+	r.Position.Y = Scale(height, skeletonMaxY, -joint.Position.Y);
+	r.Position.Z = joint.Position.Z;
+
+	return r;
+}
+
+double ScaleY(Joint joint)
+{
+	double y = ((1080 / 0.4) * -joint.Position.Y) + (1920 / 2);
+	return y;
+}
+
+void ScaleXY(Joint shoulderCenter, bool rightHand, Joint joint, float& scaledX, float& scaledY)
+{
+	double screenWidth = 1920;
+
+	double x = 0;
+	double y = ScaleY(joint);
+
+	// if rightHand then place shouldCenter on left of screen
+	// else place shouldCenter on right of screen
+	if (rightHand)
+	{
+		x = (joint.Position.X - shoulderCenter.Position.X) * screenWidth * 2;
+	}
+	else
+	{
+		x = screenWidth - ((shoulderCenter.Position.X - joint.Position.X) * (screenWidth * 2));
+	}
+
+
+	if (x < 0)
+	{
+		x = 0;
+	}
+	else if (x > screenWidth - 5)
+	{
+		x = screenWidth - 5;
+	}
+
+	if (y < 0)
+	{
+		y = 0;
+	}
+
+	scaledX = x;
+	scaledY = y;
+}
+
+
 std::vector<hand_tip_pos> hand_tip_trajectory;
 volatile bool press_detected = false;
 
@@ -182,15 +248,31 @@ void detect_press()
 
 	// Select the hand that is closer to the sensor.
 	Joint activeHand = handRight.Position.Z <= handLeft.Position.Z ? handRight : handLeft;
-
-	DepthSpacePoint depthPoint = { 0 };
-	kinect.mapper->MapCameraPointToDepthSpace(activeHand.Position, &depthPoint);
+	bool right_hand = handRight.Position.Z <= handLeft.Position.Z;
+	Joint scaled_active_hand = ScaleTo(activeHand, 1920, 1080);
 
 	static const int cDepthWidth = 512;
 	static const int cDepthHeight = 424;
 
+	DepthSpacePoint depthPoint = { 0 };
+	/*
+	kinect.mapper->MapCameraPointToDepthSpace(scaled_active_hand.Position, &depthPoint);
+
 	cursor_x = static_cast<float>(depthPoint.X * width) / cDepthWidth;
 	cursor_y = static_cast<float>(depthPoint.Y * height) / cDepthHeight;
+
+	*/
+
+	//cursor_x = scaled_active_hand.Position.X;
+	//cursor_y = scaled_active_hand.Position.Y;
+
+	ScaleXY(joints[JointType_SpineShoulder], right_hand, activeHand, cursor_x, cursor_y);
+
+
+	kinect.mapper->MapCameraPointToDepthSpace(activeHand.Position, &depthPoint);
+
+	hand_tip_x = static_cast<float>(depthPoint.X * width) / cDepthWidth;
+	hand_tip_y = static_cast<float>(depthPoint.Y * height) / cDepthHeight;
 
 	hand_tip_pos p;
 
@@ -349,6 +431,18 @@ void draw_kinect_data() {
 			b->check_highlighted(cursor_x, cursor_y);
 			b->draw(rb);
 		}
+	}
+
+	{
+
+		agg::ellipse ell;
+		int r = 10;
+		auto color = agg::rgba(0.0, 1.0, 0.0, 0.3);
+		ell.init(hand_tip_x, hand_tip_y, r, r, 50);
+		agg::rasterizer_scanline_aa<> ras;
+		agg::scanline_p8 sl;
+		ras.add_path(ell);
+		agg::render_scanlines_aa_solid(ras, sl, rb, color);
 	}
 
 	{
