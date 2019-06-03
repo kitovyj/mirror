@@ -88,6 +88,7 @@
     <ClCompile Include="agg_font_win32_tt.cpp" />
     <ClCompile Include="classifier.cpp" />
     <ClCompile Include="http-get.cpp" />
+    <ClCompile Include="KinectJointFilter.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="recommendation.cpp" />
   </ItemGroup>
@@ -100,6 +101,7 @@
     <ClInclude Include="classifier.h" />
     <ClInclude Include="http-get.h" />
     <ClInclude Include="kinect-utils.h" />
+    <ClInclude Include="KinectJointFilter.h" />
     <ClInclude Include="product-button.h" />
     <ClInclude Include="recommendation.h" />
     <ClInclude Include="skeleton-view.h" />

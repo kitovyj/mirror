@@ -52,6 +52,8 @@
 #include "classifier.h"
 #include "recommendation.h"
 
+#include "KinectJointFilter.h"
+
 const int bytes_per_pixel = 4;
 const int width = kinect_t::width;
 const int height = kinect_t::height;
@@ -117,29 +119,6 @@ bool init(int argc, char* argv[]) {
     return true;
 }
 
-
-void get_body_data(IMultiSourceFrame* frame) {
-	IBodyFrame* bodyframe;
-	IBodyFrameReference* frameref = NULL;
-	frame->get_BodyFrameReference(&frameref);
-	frameref->AcquireFrame(&bodyframe);
-	if (frameref) frameref->Release();
-
-	if (!bodyframe) return;
-
-	IBody* body[BODY_COUNT] = { 0 };
-	bodyframe->GetAndRefreshBodyData(BODY_COUNT, body);
-	for (int i = 0; i < BODY_COUNT; i++) {
-		body[i]->get_IsTracked(&tracked);
-		if (tracked) {
-			body[i]->GetJoints(JointType_Count, joints);
-			break;
-		}
-	}
-
-	if (bodyframe) bodyframe->Release();
-}
-
 struct hand_tip_pos {
 
 	std::chrono::time_point<std::chrono::steady_clock> time_point;
@@ -189,6 +168,8 @@ Joint ScaleTo(Joint joint, int width, int height, float skeletonMaxX = 1.0, floa
 
 	return r;
 }
+
+// https://stackoverflow.com/questions/13313005/kinect-sdk-1-6-and-joint-scaleto-method
 
 double ScaleY(Joint joint)
 {
@@ -292,11 +273,11 @@ void detect_press()
 	hand_tip_trajectory.erase(hand_tip_trajectory.begin(), old);
 
 
-	std::chrono::steady_clock::duration jesture_duration = std::chrono::milliseconds(200);
-	std::chrono::steady_clock::duration jesture_duration_delta = std::chrono::milliseconds(200);
+	std::chrono::steady_clock::duration jesture_start_min = std::chrono::milliseconds(500);
+	std::chrono::steady_clock::duration jesture_start_max = std::chrono::milliseconds(100);
 
-	std::chrono::time_point<std::chrono::steady_clock> earliest = p.time_point - jesture_duration - jesture_duration_delta;
-	std::chrono::time_point<std::chrono::steady_clock> latest = p.time_point - jesture_duration + jesture_duration_delta;
+	std::chrono::time_point<std::chrono::steady_clock> earliest = p.time_point - jesture_start_min;
+	std::chrono::time_point<std::chrono::steady_clock> latest = p.time_point - jesture_start_max;
 
 	auto lower = std::lower_bound(hand_tip_trajectory.begin(), hand_tip_trajectory.end(), earliest, hand_tip_pos_compare());
 	auto upper = std::lower_bound(hand_tip_trajectory.begin(), hand_tip_trajectory.end(), latest, hand_tip_pos_compare());
@@ -323,7 +304,7 @@ void detect_press()
 		for (auto i = start;i != hand_tip_trajectory.end();i++)
 		{
 			double d = sqrt(pow(p.x - i->x, 2) + pow(p.y - i->y, 2) + pow(p.z - i->z, 2));
-			if (d > max_distance)
+			if (d > max_distance && i->y < p.y)
 			{
 				max_distance = d;
 			}
@@ -340,6 +321,48 @@ void detect_press()
 
 	}
 
+}
+
+Sample::FilterDoubleExponential filter;
+
+
+
+void get_body_data(IMultiSourceFrame* frame) {
+	IBodyFrame* bodyframe;
+	IBodyFrameReference* frameref = NULL;
+	frame->get_BodyFrameReference(&frameref);
+	frameref->AcquireFrame(&bodyframe);
+	if (frameref) frameref->Release();
+
+	if (!bodyframe) return;
+
+	IBody* body[BODY_COUNT] = { 0 };
+	bodyframe->GetAndRefreshBodyData(BODY_COUNT, body);
+
+	for (int i = 0; i < BODY_COUNT; i++) {
+
+		body[i]->get_IsTracked(&tracked);
+		if (tracked) {
+
+			body[i]->GetJoints(JointType_Count, joints);
+
+			filter.Update(joints);
+			auto filtered = filter.GetFilteredJoints();
+
+
+			for (int j = 0;j < JointType_Count;j++)
+			{
+				joints[j].Position.X = DirectX::XMVectorGetX(filtered[j]);
+				joints[j].Position.Y = DirectX::XMVectorGetY(filtered[j]);
+				joints[j].Position.Z = DirectX::XMVectorGetZ(filtered[j]);
+			}
+
+			//body[i]->GetJoints(JointType_Count, joints);
+			break;
+		}
+	}
+
+	if (bodyframe) bodyframe->Release();
 }
 
 bool get_kinect_data(GLubyte* dest) {
@@ -437,7 +460,7 @@ void draw_kinect_data() {
 
 		agg::ellipse ell;
 		int r = 10;
-		auto color = agg::rgba(0.0, 1.0, 0.0, 0.3);
+		auto color = agg::rgba(1.0, 1.0, 0.0, 0.3);
 		ell.init(hand_tip_x, hand_tip_y, r, r, 50);
 		agg::rasterizer_scanline_aa<> ras;
 		agg::scanline_p8 sl;

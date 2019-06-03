@@ -8,6 +8,11 @@
 #include <boost/gil/image_view_factory.hpp>
 #include <boost/gil/extension/numeric/sampler.hpp>
 #include <boost/gil/extension/numeric/resample.hpp>
+#include <boost/gil/image.hpp>
+#include <boost/gil/typedefs.hpp>
+//#include <boost/gil/extension/io/jpeg_io.hpp>
+#include <boost/gil.hpp>
+
 #include <boost/algorithm/string.hpp>
 
 #include "button.h"
@@ -17,7 +22,9 @@ struct product_button_t : public button_t {
 
 	std::thread thread;
 
-	boost::gil::rgb8_image_t image;
+	boost::gil::rgba8_image_t image;
+	boost::gil::rgb8_image_t image_rgb;
+	bool use_rgb_image;
 	boost::gil::bgra8_image_t scaled_image;
 
 	volatile bool image_loaded;
@@ -31,6 +38,7 @@ struct product_button_t : public button_t {
 		this->url = url;
 
 		image_loaded = false;
+		use_rgb_image = false;
 
 		thread = std::thread(&product_button_t::get_picture, this);
 
@@ -61,23 +69,29 @@ struct product_button_t : public button_t {
 
 			if (boost::ends_with(url, "png"))
 			{
-				image_read_settings<png_tag> readSettings;
-				read_image(ss, image, readSettings);
+				image_read_settings<png_tag> settings;
+				read_image(ss, image, settings);
 			}
 			else if (boost::ends_with(url, "jpg"))
 			{
-				image_read_settings<jpeg_tag> readSettings;
-				read_image(ss, image, readSettings);
+				image_read_settings<jpeg_tag> settings;
+				read_image(ss, image_rgb, settings);
+				use_rgb_image = true;
+
+				//boost::gil::copy_pixels(boost::gil::color_converted_view<rgba8_pixel_t>(image_rgb), boost::gil::view(image));
+				//boost::gil::copy_pixels(boost::gil::view(image_rgb), boost::gil::view(image));
+				//image.operator=(image_rgb);
 			}
 			else {
 				return;
 			}
 
-
 			scaled_image = boost::gil::bgra8_image_t(width, height);
-
-
-			resize_view(const_view(image), view(scaled_image), bilinear_sampler());
+			
+			if(use_rgb_image)
+				resize_view(const_view(image_rgb), view(scaled_image), bilinear_sampler());
+			else
+				resize_view(const_view(image), view(scaled_image), bilinear_sampler());
 
 			image_loaded = true;
 
