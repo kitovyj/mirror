@@ -22,6 +22,8 @@
 
 #include "agg_draw_text.h"
 
+#include "screen.h"
+
 struct clickable_t {
 
 	float x_pos_f = 0;
@@ -32,8 +34,8 @@ struct clickable_t {
 	int x_pos, y_pos;
 	int width, height;
 
-	const int screen_width = 1920;
-	const int screen_height = 1080;
+	const int screen_width = screen_t::width;
+	const int screen_height = screen_t::height;
 
 	std::function<void()> on_click;
 

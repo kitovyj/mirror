@@ -54,9 +54,9 @@
 
 #include "KinectJointFilter.h"
 
+#include "screen.h"
+
 const int bytes_per_pixel = 4;
-const int width = kinect_t::width;
-const int height = kinect_t::height;
 
 kinect_t kinect;
 
@@ -65,9 +65,9 @@ float hand_tip_x, hand_tip_y;
 
 GLuint textureId;              // ID of the texture to contain Kinect RGB Data
 
-std::vector<GLubyte> data(width*height * bytes_per_pixel);  // BGRA array containing the texture data
-std::vector<GLubyte> last_frame(width*height * bytes_per_pixel);  // BGRA array containing the texture data
-std::vector<GLubyte> frame(width*height * bytes_per_pixel);  // BGRA array containing the texture data
+std::vector<GLubyte> data(screen_t::width*screen_t::height * bytes_per_pixel);
+std::vector<GLubyte> last_frame(kinect_t::width*kinect_t::height * bytes_per_pixel);
+std::vector<GLubyte> frame(kinect_t::width*kinect_t::height * bytes_per_pixel); 
 
 typedef agg::pixfmt_bgra32 pixfmt;
 typedef agg::renderer_base<pixfmt> renderer_base;
@@ -78,10 +78,10 @@ typedef agg::renderer_scanline_bin_solid<renderer_base> renderer_bin;
 BOOLEAN tracked;							// Whether we see a body
 Joint joints[JointType_Count];				// List of joints in the tracked body
 
-skeleton_view_t seleleton_view(&data[0], width, height, kinect);
+skeleton_view_t seleleton_view(&data[0], screen_t::width, screen_t::height, kinect);
 
 
-agg::rendering_buffer rendering_buffer(&data[0], width, height, width * bytes_per_pixel);
+agg::rendering_buffer rendering_buffer(&data[0], screen_t::width, screen_t::height, screen_t::width * bytes_per_pixel);
 pixfmt pixf(rendering_buffer);
 renderer_base rb(pixf);
 
@@ -112,7 +112,7 @@ volatile state_t state = s_idle;
 bool init(int argc, char* argv[]) {
     glutInit(&argc, argv);
     glutInitDisplayMode(GLUT_DEPTH | GLUT_DOUBLE | GLUT_RGBA);
-    glutInitWindowSize(width, height);
+    glutInitWindowSize(screen_t::width, screen_t::height);
     glutCreateWindow("MagicMirror");
     glutDisplayFunc(draw);
     glutIdleFunc(idle);
@@ -173,13 +173,13 @@ Joint ScaleTo(Joint joint, int width, int height, float skeletonMaxX = 1.0, floa
 
 double ScaleY(Joint joint)
 {
-	double y = ((1080 / 0.4) * -joint.Position.Y) + (1920 / 2);
+	double y = ((screen_t::height / 0.4) * -joint.Position.Y) + (screen_t::width / 2);
 	return y;
 }
 
 void ScaleXY(Joint shoulderCenter, bool rightHand, Joint joint, float& scaledX, float& scaledY)
 {
-	double screenWidth = 1920;
+	double screenWidth = screen_t::width;
 
 	double x = 0;
 	double y = ScaleY(joint);
@@ -230,7 +230,7 @@ void detect_press()
 	// Select the hand that is closer to the sensor.
 	Joint activeHand = handRight.Position.Z <= handLeft.Position.Z ? handRight : handLeft;
 	bool right_hand = handRight.Position.Z <= handLeft.Position.Z;
-	Joint scaled_active_hand = ScaleTo(activeHand, 1920, 1080);
+	Joint scaled_active_hand = ScaleTo(activeHand, screen_t::width, screen_t::height);
 
 	static const int cDepthWidth = 512;
 	static const int cDepthHeight = 424;
@@ -252,8 +252,8 @@ void detect_press()
 
 	kinect.mapper->MapCameraPointToDepthSpace(activeHand.Position, &depthPoint);
 
-	hand_tip_x = static_cast<float>(depthPoint.X * width) / cDepthWidth;
-	hand_tip_y = static_cast<float>(depthPoint.Y * height) / cDepthHeight;
+	hand_tip_x = static_cast<float>(depthPoint.X * kinect_t::width) / cDepthWidth;
+	hand_tip_y = static_cast<float>(depthPoint.Y * kinect_t::height) / cDepthHeight;
 
 	hand_tip_pos p;
 
@@ -325,8 +325,6 @@ void detect_press()
 
 Sample::FilterDoubleExponential filter;
 
-
-
 void get_body_data(IMultiSourceFrame* frame) {
 	IBodyFrame* bodyframe;
 	IBodyFrameReference* frameref = NULL;
@@ -387,7 +385,7 @@ bool get_kinect_data(GLubyte* dest) {
 		if (color_frame)
 		{
 
-			color_frame->CopyConvertedFrameDataToArray(width*height * bytes_per_pixel, dest, ColorImageFormat_Bgra);
+			color_frame->CopyConvertedFrameDataToArray(kinect_t::width*kinect_t::height * bytes_per_pixel, dest, ColorImageFormat_Bgra);
 			if (color_frame) color_frame->Release();
 			result = true;
 
@@ -412,8 +410,6 @@ void draw_kinect_data() {
 	if (r)
 
 	{
-		
-		std::copy(frame.begin(), frame.end(), data.begin());
 
 		{
 			std::lock_guard<std::mutex> guard(frame_mutex);
@@ -436,11 +432,38 @@ void draw_kinect_data() {
 		}
 		
 	}
-	else
+	
+	int camera_x;
+	int camera_y;
+	int camera_width;
+	int camera_height;
 
+	if (screen_t::width < screen_t::height)
 	{
-		std::copy(last_frame.begin(), last_frame.end(), data.begin());
+
+		camera_height = kinect_t::height;
+		camera_width = (kinect_t::height * screen_t::width) / screen_t::height;
+		camera_y = 0;
+		camera_x = (kinect_t::width - camera_width) / 2;
+
+
 	}
+	else
+	{
+		camera_width = kinect_t::width;
+		camera_height = (kinect_t::width * screen_t::height) / screen_t::width;
+		camera_x = 0;
+		camera_y = (kinect_t::height - camera_height) / 2;
+
+	}
+
+	//rgb8_image_t square100x100(100, 100);
+	int offset = camera_y * camera_width + camera_x;
+	auto source_view = boost::gil::interleaved_view(camera_width, camera_height, reinterpret_cast<const boost::gil::bgra8c_pixel_t*>(&last_frame.front()) + offset, kinect_t::width * bytes_per_pixel);
+	auto dest_view = boost::gil::interleaved_view(screen_t::width, screen_t::height, reinterpret_cast<boost::gil::bgra8_pixel_t*>(&data.front()), screen_t::width * bytes_per_pixel);
+	boost::gil::resize_view(source_view, dest_view, boost::gil::bilinear_sampler());
+
+	//std::copy(last_frame.begin(), last_frame.end(), data.begin());
 
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -499,7 +522,7 @@ void draw_kinect_data() {
 
 		double as = passed_ms.count() * 0.01;
 
-		auto arc = agg::arc(width/2, height/2, ar, ar, as, as + al);
+		auto arc = agg::arc(screen_t::width/2, screen_t::height/2, ar, ar, as, as + al);
 
 		agg::conv_stroke<agg::arc> p(arc);
 		p.width(30.0);
@@ -521,8 +544,8 @@ void draw_kinect_data() {
 
 			auto sz = text_size(ras, sl, ren, ren_bin, text.c_str(), text_height);
 
-			int x = width / 2 - sz.first / 2;
-			int y = height / 2 - sz.second / 2;
+			int x = screen_t::width / 2 - sz.first / 2;
+			int y = screen_t::height / 2 - sz.second / 2;
 
 			draw_text(ras, sl, ren, ren_bin, x, y, agg::rgba(1.0, 1.0, 1.0, 7.0), text.c_str(), text_height);
 
@@ -539,7 +562,7 @@ void draw_kinect_data() {
 		glBindTexture(GL_TEXTURE_2D, textureId);
 
 
-		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_BGRA_EXT, GL_UNSIGNED_BYTE, (GLvoid*)&data[0]);
+		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, screen_t::width, screen_t::height, GL_BGRA_EXT, GL_UNSIGNED_BYTE, (GLvoid*)&data[0]);
 
 
 
@@ -547,11 +570,11 @@ void draw_kinect_data() {
 		glTexCoord2f(0.0f, 0.0f);
 		glVertex3f(0, 0, 0);
 		glTexCoord2f(1.0f, 0.0f);
-		glVertex3f(width, 0, 0);
+		glVertex3f(screen_t::width, 0, 0);
 		glTexCoord2f(1.0f, 1.0f);
-		glVertex3f(width, height, 0.0f);
+		glVertex3f(screen_t::width, screen_t::height, 0.0f);
 		glTexCoord2f(0.0f, 1.0f);
-		glVertex3f(0, height, 0.0f);
+		glVertex3f(0, screen_t::height, 0.0f);
 		glEnd();
 		//first += 1;
 	}
@@ -579,7 +602,7 @@ void on_product_clicked()
 void up_my_style(std::vector<unsigned char>& frame)
 {
 
-	auto detection = classify_image(&frame.front(), width, height);
+	auto detection = classify_image(&frame.front(), kinect_t::width, kinect_t::height);
 	auto recommendation = get_recommendations(detection);
 
 	{
@@ -688,7 +711,7 @@ int main(int argc, char* argv[]) {
     glBindTexture(GL_TEXTURE_2D, textureId);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_BGRA_EXT, GL_UNSIGNED_BYTE, (GLvoid*) &data.front());
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, screen_t::width, screen_t::height, 0, GL_BGRA_EXT, GL_UNSIGNED_BYTE, (GLvoid*) &data.front());
     glBindTexture(GL_TEXTURE_2D, 0);
 
     // OpenGL setup
@@ -697,10 +720,10 @@ int main(int argc, char* argv[]) {
     glEnable(GL_TEXTURE_2D);
 
     // Camera setup
-    glViewport(0, 0, width, height);
+    glViewport(0, 0, screen_t::width, screen_t::height);
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
-    glOrtho(0, width, height, 0, 1, -1);
+    glOrtho(0, screen_t::width, screen_t::height, 0, 1, -1);
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
 
