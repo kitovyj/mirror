@@ -108,7 +108,7 @@ items_detection_t classify_image(unsigned char* pdata, int width, int height)
 	auto bytesSent = 0;
 	while (bytesSent < data.size())
 	{
-		int bytesToSendNow = std::min(data.size() - bytesSent, unsigned(1024 * 100));
+		int bytesToSendNow = std::min(data.size() - bytesSent, std::size_t(1024 * 100));
 		socket.write_some(boost::asio::buffer(&data[0] + bytesSent, bytesToSendNow));
 		bytesSent += bytesToSendNow;
 	}

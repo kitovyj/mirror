@@ -73,5 +73,8 @@
     <ClInclude Include="screen.h">
       <Filter>Source Files</Filter>
     </ClInclude>
+    <ClInclude Include="up-down-button.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

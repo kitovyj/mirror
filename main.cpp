@@ -5,6 +5,7 @@
 
 #include <Windows.h>
 #include <Ole2.h>
+#include <shellscalingapi.h>
 
 #include <gl/GL.h>
 #include <gl/GLU.h>
@@ -30,6 +31,8 @@
 
 #include <Kinect.h>
 
+#include <opencv2/opencv.hpp>
+
 #include "agg_draw_text.h"
 
 #include <iostream>
@@ -48,6 +51,7 @@
 #include "skeleton-view.h"
 #include "button.h"
 #include "product-button.h"
+#include "up-down-button.h"
 
 #include "classifier.h"
 #include "recommendation.h"
@@ -68,6 +72,45 @@ GLuint textureId;              // ID of the texture to contain Kinect RGB Data
 std::vector<GLubyte> data(screen_t::width*screen_t::height * bytes_per_pixel);
 std::vector<GLubyte> last_frame(kinect_t::width*kinect_t::height * bytes_per_pixel);
 std::vector<GLubyte> frame(kinect_t::width*kinect_t::height * bytes_per_pixel); 
+
+
+cv::Mat data_opencv;
+cv::Mat last_frame_window_opencv;
+
+void init_resize_matrices()
+{
+
+	int camera_x;
+	int camera_y;
+	int camera_width;
+	int camera_height;
+
+	if (screen_t::width < screen_t::height)
+	{
+
+		camera_height = kinect_t::height;
+		camera_width = (kinect_t::height * screen_t::width) / screen_t::height;
+		camera_y = 0;
+		camera_x = (kinect_t::width - camera_width) / 2;
+
+
+	}
+	else
+	{
+		camera_width = kinect_t::width;
+		camera_height = (kinect_t::width * screen_t::height) / screen_t::width;
+		camera_x = 0;
+		camera_y = (kinect_t::height - camera_height) / 2;
+
+	}
+
+	int offset = camera_y * camera_width + camera_x;
+
+	data_opencv = cv::Mat(screen_t::height, screen_t::width, CV_8UC4, &data.front());
+	last_frame_window_opencv = cv::Mat(camera_height, camera_width, CV_8UC4, (&last_frame.front()) + offset * bytes_per_pixel, kinect_t::width * bytes_per_pixel);
+
+}
+
 
 typedef agg::pixfmt_bgra32 pixfmt;
 typedef agg::renderer_base<pixfmt> renderer_base;
@@ -99,25 +142,14 @@ std::mutex gui_mutex;
 std::set<std::shared_ptr<clickable_t> > clickables;
 std::set<std::shared_ptr<button_t> > buttons;
 
-std::shared_ptr<button_t> button_next;
-std::shared_ptr<button_t> button_prev;
+std::shared_ptr<up_down_button_t> button_next;
+std::shared_ptr<up_down_button_t> button_prev;
 
 std::vector<std::shared_ptr<product_button_t>> product_buttons;
 
 enum state_t { s_idle, s_processing_photo, s_recommendations_view };
 
 volatile state_t state = s_idle;
-
-
-bool init(int argc, char* argv[]) {
-    glutInit(&argc, argv);
-    glutInitDisplayMode(GLUT_DEPTH | GLUT_DOUBLE | GLUT_RGBA);
-    glutInitWindowSize(screen_t::width, screen_t::height);
-    glutCreateWindow("MagicMirror");
-    glutDisplayFunc(draw);
-    glutIdleFunc(idle);
-    return true;
-}
 
 struct hand_tip_pos {
 
@@ -326,6 +358,7 @@ void detect_press()
 Sample::FilterDoubleExponential filter;
 
 void get_body_data(IMultiSourceFrame* frame) {
+
 	IBodyFrame* bodyframe;
 	IBodyFrameReference* frameref = NULL;
 	frame->get_BodyFrameReference(&frameref);
@@ -361,6 +394,7 @@ void get_body_data(IMultiSourceFrame* frame) {
 	}
 
 	if (bodyframe) bodyframe->Release();
+
 }
 
 bool get_kinect_data(GLubyte* dest) {
@@ -432,36 +466,19 @@ void draw_kinect_data() {
 		}
 		
 	}
-	
-	int camera_x;
-	int camera_y;
-	int camera_width;
-	int camera_height;
-
-	if (screen_t::width < screen_t::height)
-	{
-
-		camera_height = kinect_t::height;
-		camera_width = (kinect_t::height * screen_t::width) / screen_t::height;
-		camera_y = 0;
-		camera_x = (kinect_t::width - camera_width) / 2;
-
-
-	}
-	else
-	{
-		camera_width = kinect_t::width;
-		camera_height = (kinect_t::width * screen_t::height) / screen_t::width;
-		camera_x = 0;
-		camera_y = (kinect_t::height - camera_height) / 2;
-
-	}
 
 	//rgb8_image_t square100x100(100, 100);
+
+	/*
 	int offset = camera_y * camera_width + camera_x;
 	auto source_view = boost::gil::interleaved_view(camera_width, camera_height, reinterpret_cast<const boost::gil::bgra8c_pixel_t*>(&last_frame.front()) + offset, kinect_t::width * bytes_per_pixel);
 	auto dest_view = boost::gil::interleaved_view(screen_t::width, screen_t::height, reinterpret_cast<boost::gil::bgra8_pixel_t*>(&data.front()), screen_t::width * bytes_per_pixel);
 	boost::gil::resize_view(source_view, dest_view, boost::gil::bilinear_sampler());
+	*/
+
+	//cvResize(&last_frame_window_opencv, &data_opencv);
+	cv::resize(last_frame_window_opencv, data_opencv, data_opencv.size(), 0, 0);
+
 
 	//std::copy(last_frame.begin(), last_frame.end(), data.begin());
 
@@ -702,8 +719,37 @@ void key_pressed(unsigned char key, int x, int y) {
 
 }
 
+
+bool init(int argc, char* argv[]) {
+	glutInit(&argc, argv);
+	glutInitDisplayMode(GLUT_DEPTH | GLUT_DOUBLE | GLUT_RGBA);
+	glutInitWindowSize(screen_t::width, screen_t::height);
+	glutCreateWindow("MagicMirror");
+	glutDisplayFunc(draw);
+	glutIdleFunc(idle);
+
+	init_resize_matrices();
+
+	return true;
+}
+
 int main(int argc, char* argv[]) {
-    
+   
+	HWND hwnd = GetForegroundWindow();
+
+	HMONITOR monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+
+	UINT dpi_x;
+	UINT dpi_y;
+
+	GetDpiForMonitor(monitor, MDT_RAW_DPI, &dpi_x, &dpi_y);
+
+	screen_t::dpc_x = dpi_x * 0.393701;
+	screen_t::dpc_y = dpi_y * 0.393701;
+
+	screen_t::width_cm = screen_t::width / screen_t::dpc_x;
+	screen_t::height_cm = screen_t::height / screen_t::dpc_y;
+
 	if (!init(argc, argv)) return 1;
 
     // Initialize textures
@@ -728,13 +774,27 @@ int main(int argc, char* argv[]) {
     glLoadIdentity();
 
 
-	auto b = std::make_shared<button_t>(0.8, 0.05, 0.175, 3.0, &on_up_my_style_clicked, "Up My Style!");
+	// in cm
+	double b_width = 10;
+	double b_height = 5;
+	double b_space = 1;
+	double b_left_x = screen_t::width_cm - b_width - b_space;
+	double b_top_y = b_space;
+
+	auto b = std::make_shared<button_t>(b_left_x, b_top_y, b_width, b_height, &on_up_my_style_clicked, "Up My Style!");
 
 	buttons.insert(b);
 	clickables.insert(b);
 
-	button_prev = std::make_shared<button_t>(0.3, 0.55, 0.18, 3.0, &on_prev_clicked, "Back");
-	button_next = std::make_shared<button_t>(0.5, 0.55, 0.175, 3.0, &on_next_clicked, "Next");
+	double top_x = b_space + b_height + b_space;
+	double left_x = b_left_x;
+
+	double udb_width = 4.5;
+	double udb_height = 4;
+
+	button_next = std::make_shared<up_down_button_t>(left_x, top_x, udb_width, udb_height, &on_prev_clicked, true);
+	left_x += b_space + udb_width;
+	button_prev = std::make_shared<up_down_button_t>(left_x, top_x, udb_width, udb_height, &on_next_clicked, false);
 
 	glutKeyboardFunc(key_pressed);
 

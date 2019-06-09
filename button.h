@@ -29,7 +29,7 @@ struct clickable_t {
 	float x_pos_f = 0;
 	float y_pos_f = 0;
 	float width_f = 0.3;
-	float size_ratio = 0.5;
+	float height_f = 0.5;
 
 	int x_pos, y_pos;
 	int width, height;
@@ -39,20 +39,20 @@ struct clickable_t {
 
 	std::function<void()> on_click;
 
-	clickable_t(float x_pos_f, float y_pos_f, float width_f, float size_ratio, std::function<void()> on_click)
+	clickable_t(float x_pos_f, float y_pos_f, float width_f, float height_f, std::function<void()> on_click)
 	{
 
 		this->x_pos_f = x_pos_f;
 		this->y_pos_f = y_pos_f;
 		this->width_f = width_f;
-		this->size_ratio = size_ratio;
+		this->height_f = height_f;
 
-		width = screen_width * width_f;
+		width = screen_t::dpc_x * width_f;
 		double scaling_k = float(width) / screen_width;
 
-		height = width / size_ratio;
-		x_pos = x_pos_f * screen_width;
-		y_pos = y_pos_f * screen_height;
+		height = screen_t::dpc_y * height_f;
+		x_pos = x_pos_f * screen_t::dpc_x;
+		y_pos = y_pos_f * screen_t::dpc_y;
 
 		this->on_click = on_click;
 
@@ -86,8 +86,8 @@ struct button_t : public clickable_t {
 
 	bool highlighted;
 
-	button_t(float x_pos_f, float y_pos_f, float width_f, float size_ratio, std::function<void()> on_click, const std::string& text)
-		: clickable_t(x_pos_f, y_pos_f, width_f, size_ratio, on_click)
+	button_t(float x_pos_f, float y_pos_f, float width_f, float height_f, std::function<void()> on_click, const std::string& text)
+		: clickable_t(x_pos_f, y_pos_f, width_f, height_f, on_click)
 	{
 		highlighted = false;
 		this->text = text;
