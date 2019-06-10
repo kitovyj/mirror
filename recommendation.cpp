@@ -40,7 +40,7 @@ std::string url_encode(const std::string &value) {
 	return escaped.str();
 }
 
-recommendations_t get_recommendations(const items_detection_t& detection, int page)
+recommendations_t get_recommendations(const items_detection_t& detection, int page, int per_page)
 {
 
 	namespace beast = boost::beast;     // from <boost/beast.hpp>
@@ -61,8 +61,8 @@ recommendations_t get_recommendations(const items_detection_t& detection, int pa
 //	target += "&face_warm_cold=n/a";
 //	target += "&face_contrast=n/a";
 	target += "&page=" + std::to_string(page);
-	target += "&per_page=" + std::to_string(8);
-	target += "&store=" + std::to_string(2);
+	target += "&per_page=" + std::to_string(per_page);
+	target += "&store=" + std::to_string(1);
 	target += "&rules=" + std::to_string(1);
 	target += "&upload_id=" + std::to_string(0);
 

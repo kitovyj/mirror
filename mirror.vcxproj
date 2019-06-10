@@ -112,6 +112,11 @@
       <AdditionalIncludeDirectories>D:\projects\opencv\build\include;D:\projects\freetype-windows-binaries\include;D:\projects\agg\agg-2.4\font_freetype;D:\projects\agg\agg-2.4\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <UndefinePreprocessorDefinitions>
       </UndefinePreprocessorDefinitions>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
+      <BufferSecurityCheck>true</BufferSecurityCheck>
+      <EnableEnhancedInstructionSet>AdvancedVectorExtensions2</EnableEnhancedInstructionSet>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
@@ -138,16 +143,24 @@
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
-      <PreprocessorDefinitions>WIN32;NDEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_WINDOWS;%(PreprocessorDefinitions);_WIN32_WINNT=0x0603</PreprocessorDefinitions>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
       <WarningLevel>Level3</WarningLevel>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <AdditionalIncludeDirectories>D:\projects\opencv\build\include;D:\projects\freetype-windows-binaries\include;D:\projects\agg\agg-2.4\font_freetype;D:\projects\agg\agg-2.4\include;$(KINECTSDK20_DIR)/inc;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <SubSystem>Windows</SubSystem>
+      <SubSystem>Console</SubSystem>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
+      <LinkTimeCodeGeneration>Default</LinkTimeCodeGeneration>
+      <AdditionalDependencies>kinect20.lib;%(AdditionalDependencies);antigrain.lib;freetype.lib;libpng16.lib;libcurl.lib;jpeg.lib;opencv_world343.lib;Shcore.lib</AdditionalDependencies>
+      <AdditionalLibraryDirectories>D:\projects\opencv\build\x64\vc15\lib;d:\vera\code\mirror\packages\libjpeg-msvc-x64.9.1.0.8807\build\native\lib_release\;D:\vera\code\mirror\packages\curl.7.30.0.2\build\native\lib\v110\x64\Release\dynamic;D:\vera\code\mirror\packages\libpng.1.6.28.1\build\native\lib\x64\v140\dynamic\Release;D:\projects\freetype-windows-binaries\win64;D:\projects\agg\agg-2.4\x64\Release;D:\vera\code\mirror\packages\nupengl.core.0.1.0.1\build\native\lib\x64;$(KINECTSDK20_DIR)/lib/x64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -195,9 +208,8 @@
     <Import Project="packages\libssh2.1.4.3.1\build\native\libssh2.targets" Condition="Exists('packages\libssh2.1.4.3.1\build\native\libssh2.targets')" />
     <Import Project="packages\openssl-vc141-static-x86_64.1.0.2\build\native\openssl-vc141-static-x86_64.targets" Condition="Exists('packages\openssl-vc141-static-x86_64.1.0.2\build\native\openssl-vc141-static-x86_64.targets')" />
     <Import Project="packages\curl-vc141-dynamic-x86_64.7.59.0\build\native\curl-vc141-dynamic-x86_64.targets" Condition="Exists('packages\curl-vc141-dynamic-x86_64.7.59.0\build\native\curl-vc141-dynamic-x86_64.targets')" />
-    <Import Project="packages\libjpeg.redist.9.2.0.1\build\native\libjpeg.redist.targets" Condition="Exists('packages\libjpeg.redist.9.2.0.1\build\native\libjpeg.redist.targets')" />
-    <Import Project="packages\libjpeg.9.2.0.1\build\native\libjpeg.targets" Condition="Exists('packages\libjpeg.9.2.0.1\build\native\libjpeg.targets')" />
     <Import Project="packages\zlib-msvc-x64.1.2.11.8900\build\native\zlib-msvc-x64.targets" Condition="Exists('packages\zlib-msvc-x64.1.2.11.8900\build\native\zlib-msvc-x64.targets')" />
+    <Import Project="packages\libjpeg-msvc-x64.9.1.0.8807\build\native\libjpeg-msvc-x64.targets" Condition="Exists('packages\libjpeg-msvc-x64.9.1.0.8807\build\native\libjpeg-msvc-x64.targets')" />
   </ImportGroup>
   <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
     <PropertyGroup>
@@ -220,8 +232,7 @@
     <Error Condition="!Exists('packages\libssh2.1.4.3.1\build\native\libssh2.targets')" Text="$([System.String]::Format('$(ErrorText)', 'packages\libssh2.1.4.3.1\build\native\libssh2.targets'))" />
     <Error Condition="!Exists('packages\openssl-vc141-static-x86_64.1.0.2\build\native\openssl-vc141-static-x86_64.targets')" Text="$([System.String]::Format('$(ErrorText)', 'packages\openssl-vc141-static-x86_64.1.0.2\build\native\openssl-vc141-static-x86_64.targets'))" />
     <Error Condition="!Exists('packages\curl-vc141-dynamic-x86_64.7.59.0\build\native\curl-vc141-dynamic-x86_64.targets')" Text="$([System.String]::Format('$(ErrorText)', 'packages\curl-vc141-dynamic-x86_64.7.59.0\build\native\curl-vc141-dynamic-x86_64.targets'))" />
-    <Error Condition="!Exists('packages\libjpeg.redist.9.2.0.1\build\native\libjpeg.redist.targets')" Text="$([System.String]::Format('$(ErrorText)', 'packages\libjpeg.redist.9.2.0.1\build\native\libjpeg.redist.targets'))" />
-    <Error Condition="!Exists('packages\libjpeg.9.2.0.1\build\native\libjpeg.targets')" Text="$([System.String]::Format('$(ErrorText)', 'packages\libjpeg.9.2.0.1\build\native\libjpeg.targets'))" />
     <Error Condition="!Exists('packages\zlib-msvc-x64.1.2.11.8900\build\native\zlib-msvc-x64.targets')" Text="$([System.String]::Format('$(ErrorText)', 'packages\zlib-msvc-x64.1.2.11.8900\build\native\zlib-msvc-x64.targets'))" />
+    <Error Condition="!Exists('packages\libjpeg-msvc-x64.9.1.0.8807\build\native\libjpeg-msvc-x64.targets')" Text="$([System.String]::Format('$(ErrorText)', 'packages\libjpeg-msvc-x64.9.1.0.8807\build\native\libjpeg-msvc-x64.targets'))" />
   </Target>
 </Project>

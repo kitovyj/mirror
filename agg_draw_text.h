@@ -64,9 +64,9 @@ unsigned draw_text(Rasterizer& ras, Scanline& sl,
 	m_feng.width((m_width == m_height) ? 0.0 : m_width / 2.4);
 	m_feng.flip_y(true);
 
-	agg::trans_affine mtx;
-	mtx *= agg::trans_affine_rotation(agg::deg2rad(-4.0));
-	mtx *= agg::trans_affine_skewing(-0.4, 0);
+	//agg::trans_affine mtx;
+	//mtx *= agg::trans_affine_rotation(agg::deg2rad(-4.0));
+	//mtx *= agg::trans_affine_skewing(-0.4, 0);
 	//mtx *= agg::trans_affine_translation(1, 0);
 	//m_feng.transform(mtx);
 

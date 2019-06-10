@@ -73,6 +73,32 @@ std::vector<GLubyte> data(screen_t::width*screen_t::height * bytes_per_pixel);
 std::vector<GLubyte> last_frame(kinect_t::width*kinect_t::height * bytes_per_pixel);
 std::vector<GLubyte> frame(kinect_t::width*kinect_t::height * bytes_per_pixel); 
 
+typedef agg::pixfmt_bgra32 pixfmt;
+typedef agg::renderer_base<pixfmt> renderer_base;
+typedef agg::renderer_scanline_aa_solid<renderer_base> renderer_solid;
+typedef agg::renderer_scanline_bin_solid<renderer_base> renderer_bin;
+
+
+agg::rendering_buffer rendering_buffer(&data[0], screen_t::width, screen_t::height, screen_t::width * bytes_per_pixel);
+pixfmt pixf(rendering_buffer);
+renderer_base rb(pixf);
+
+
+canvas_t::pixfmt_pre pixf_pre(rendering_buffer);
+canvas_t::ren_base_pre rb_pre(pixf_pre);
+
+
+boost::gil::bgra8_view_t gil_view = boost::gil::interleaved_view(rb.ren().width(), rb.ren().height(), reinterpret_cast<boost::gil::bgra8_pixel_t*>(rb.ren().row_ptr(0)), rb.ren().width() * bytes_per_pixel);
+
+canvas_t canvas(rb, rb_pre, gil_view, rendering_buffer);
+
+
+//auto rp = rb.ren().row_ptr(0);
+
+//auto screen_view = boost::gil::interleaved_view(rb.ren().width(), rb.ren().height(), reinterpret_cast<boost::gil::bgra8_pixel_t*>(rp), rb.ren().width() * bytes_per_pixel);
+
+
+
 
 cv::Mat data_opencv;
 cv::Mat last_frame_window_opencv;
@@ -112,21 +138,11 @@ void init_resize_matrices()
 }
 
 
-typedef agg::pixfmt_bgra32 pixfmt;
-typedef agg::renderer_base<pixfmt> renderer_base;
-typedef agg::renderer_scanline_aa_solid<renderer_base> renderer_solid;
-typedef agg::renderer_scanline_bin_solid<renderer_base> renderer_bin;
-
 // Body tracking variables
 BOOLEAN tracked;							// Whether we see a body
 Joint joints[JointType_Count];				// List of joints in the tracked body
 
 skeleton_view_t seleleton_view(&data[0], screen_t::width, screen_t::height, kinect);
-
-
-agg::rendering_buffer rendering_buffer(&data[0], screen_t::width, screen_t::height, screen_t::width * bytes_per_pixel);
-pixfmt pixf(rendering_buffer);
-renderer_base rb(pixf);
 
 // https://github.com/Vangos/kinect-controls/blob/master/KinectControls/KinectControls.Test/MainWindow.xaml.cs
 
@@ -492,7 +508,7 @@ void draw_kinect_data() {
 
 		for (auto &b : buttons) {
 			b->check_highlighted(cursor_x, cursor_y);
-			b->draw(rb);
+			b->draw(canvas);
 		}
 	}
 
@@ -616,32 +632,37 @@ void on_product_clicked()
 }
 
 
+recommendations_t recommendation;
+int viewed_items_start = 0;
+
 void up_my_style(std::vector<unsigned char>& frame)
 {
 
 	auto detection = classify_image(&frame.front(), kinect_t::width, kinect_t::height);
-	auto recommendation = get_recommendations(detection);
+	recommendation = get_recommendations(detection, 0, 20);
 
 	{
 		std::vector<std::shared_ptr<product_button_t>> new_product_buttons;
+
+		double b_width = 6;
+		double b_height = 6;
+		double b_space = 0.5;
+		double b_left_x = screen_t::width_cm - b_width - b_space;
+		double b_top_y = 7;
 		
-		auto ri = recommendation.items.begin();
+		double space_left = screen_t::height_cm - b_top_y;
+		int total_buttons = int(space_left / (b_height + b_space)) + 1;
 
-		for (int i = 0;i < 4;i++)
-			for (int j = 0;j < 2 && ri != recommendation.items.end();j++, ri++)
-			{
-				float w = 0.085;
-				float r = 1920. / 1080;
-				float hs = 0.01;
-				float vs = 0.08;
-				float x = 0.3 + i * (w + hs);
-				float y = 0.67 + j * (w + vs);
+		int max_i = std::min(recommendation.items.size() - viewed_items_start, std::size_t(total_buttons));
 
-				auto pb = std::make_shared<product_button_t>(x, y, w, 1.0, &on_product_clicked, ri->picture_url);
+		for (int i = 0;i < max_i;i++)
+		{
+				auto& item = recommendation.items[viewed_items_start + i];
 
+				auto pb = std::make_shared<product_button_t>(b_left_x, b_top_y, b_width, b_height, &on_product_clicked, item.picture_url);
 				new_product_buttons.push_back(pb);
-
-			}
+				b_top_y += b_height + b_space;
+		}
 
 		std::lock_guard<std::mutex> guard(gui_mutex);
 		state = s_recommendations_view;
@@ -708,7 +729,7 @@ void key_pressed(unsigned char key, int x, int y) {
 
 	if (fullscreen)
 	{
-		glutReshapeWindow(800, 600);
+		glutReshapeWindow(1080/2, 1920/2);
 		glutPositionWindow(0, 0);
 		fullscreen = false;
 	}
@@ -775,10 +796,10 @@ int main(int argc, char* argv[]) {
 
 
 	// in cm
-	double b_width = 10;
+	double b_width = 11;
 	double b_height = 5;
 	double b_space = 1;
-	double b_left_x = screen_t::width_cm - b_width - b_space;
+	double b_left_x = screen_t::width_cm - b_width - b_space / 2;
 	double b_top_y = b_space;
 
 	auto b = std::make_shared<button_t>(b_left_x, b_top_y, b_width, b_height, &on_up_my_style_clicked, "Up My Style!");
@@ -786,15 +807,15 @@ int main(int argc, char* argv[]) {
 	buttons.insert(b);
 	clickables.insert(b);
 
-	double top_x = b_space + b_height + b_space;
-	double left_x = b_left_x;
+	double top_y = b_space + b_height + b_space;
+	double left_x = screen_t::width_cm - 11.5;
 
 	double udb_width = 4.5;
 	double udb_height = 4;
 
-	button_next = std::make_shared<up_down_button_t>(left_x, top_x, udb_width, udb_height, &on_prev_clicked, true);
-	left_x += b_space + udb_width;
-	button_prev = std::make_shared<up_down_button_t>(left_x, top_x, udb_width, udb_height, &on_next_clicked, false);
+	button_prev = std::make_shared<up_down_button_t>(left_x, top_y, udb_width, udb_height, &on_prev_clicked, false);
+	top_y += 0.5 + udb_height;
+	button_next = std::make_shared<up_down_button_t>(left_x, top_y, udb_width, udb_height, &on_next_clicked, true);
 
 	glutKeyboardFunc(key_pressed);
 

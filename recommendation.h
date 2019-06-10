@@ -21,4 +21,4 @@ struct recommendations_t
 
 };
 
-recommendations_t get_recommendations(const items_detection_t&, int page = 0);
+recommendations_t get_recommendations(const items_detection_t&, int page, int per_page);

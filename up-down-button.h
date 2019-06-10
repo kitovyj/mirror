@@ -26,16 +26,6 @@ struct up_down_button_t : public button_t {
 		: button_t(x_pos_f, y_pos_f, width_f, size_ratio, on_click, "")
 	{
 		this->down = down;
-	}
-
-	~up_down_button_t()
-	{
-	}
-
-	virtual void draw(renderer_base& rb)
-	{
-
-		button_t::draw(rb);
 
 		agg::rasterizer_scanline_aa<> ras;
 		agg::scanline_p8 sl;
@@ -49,11 +39,11 @@ struct up_down_button_t : public button_t {
 
 		int x1, y1, x2, y2, x3, y3;
 
-		x1 = x_pos + space_x;
-		y1 = y_pos + height - space_y;
+		x1 = dx + space_x;
+		y1 = dy + height - space_y;
 
 		x2 = x1 + arrow_width / 2;
-		y2 = y_pos + space_y;
+		y2 = dy + space_y;
 
 		x3 = x1 + arrow_width;
 		y3 = y1;
@@ -73,11 +63,31 @@ struct up_down_button_t : public button_t {
 		stroke.line_join(agg::round_join);
 		stroke.line_cap(agg::round_cap);
 		//stroke.miter_limit(m_miter_limit.value());
-		stroke.width(20.0);
+		stroke.width(16.0);
 		ras.add_path(stroke);
+		
+		{
+			typedef prim_ren_base_type ren_base;
+			ren_base rb(this->pixfmt_normal);
+			agg::render_scanlines_aa_solid(ras, sl, rb, agg::rgba8(255, 255, 255, 255));
+		}
 
-		agg::render_scanlines_aa_solid(ras, sl, rb, agg::rgba8(255, 255, 255, 255));
+		{
+			typedef prim_ren_base_type ren_base;
+			ren_base rb(this->pixfmt_highlighted);
+			agg::render_scanlines_aa_solid(ras, sl, rb, agg::rgba8(255, 255, 255, 255));
+		}
 
+	}
+
+	~up_down_button_t()
+	{
+	}
+
+	virtual void draw(canvas_t& canvas)
+	{
+
+		button_t::draw(canvas);
 
 	}
 
