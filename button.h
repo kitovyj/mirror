@@ -151,9 +151,13 @@ struct button_t : public clickable_t {
 
 	std::mutex draw_mutex;
 
-	button_t(float x_pos_f, float y_pos_f, float width_f, float height_f, std::function<void()> on_click, const std::string& text)
+	int radius;
+
+	button_t(float x_pos_f, float y_pos_f, float width_f, float height_f, std::function<void()> on_click, const std::string& text, int radius = 20)
 		: clickable_t(x_pos_f, y_pos_f, width_f, height_f, on_click)
 	{
+
+		this->radius = radius;
 
 		highlighted = false;
 		this->text = text;
@@ -187,7 +191,7 @@ struct button_t : public clickable_t {
 			int w = width;
 			int x = dx;//x_pos;
 			int y = dy;//y_pos;
-			agg::rounded_rect r(x, y, x + width, y + height, 20);
+			agg::rounded_rect r(x, y, x + width, y + height, radius);
 			r.normalize_radius();
 
 			// Drawing as an outline
@@ -202,7 +206,7 @@ struct button_t : public clickable_t {
 
 			if (!text.empty()) {
 
-				int text_height = 42;
+				int text_height = 50;
 				agg::rasterizer_scanline_aa<> ras;
 				agg::scanline_u8 sl;
 				renderer_solid ren(rb);
@@ -239,7 +243,7 @@ struct button_t : public clickable_t {
 			int w = width;
 			int x = dx;//x_pos;
 			int y = dy;//y_pos;
-			agg::rounded_rect r(x, y, x + width, y + height, 20);
+			agg::rounded_rect r(x, y, x + width, y + height, radius);
 			r.normalize_radius();
 
 
@@ -251,7 +255,7 @@ struct button_t : public clickable_t {
 
 			if (!text.empty()) {
 
-				int text_height = 46;
+				int text_height = 56;
 				agg::rasterizer_scanline_aa<> ras;
 				agg::scanline_u8 sl;
 				renderer_solid ren(rb);

@@ -500,8 +500,10 @@ void draw_kinect_data() {
 
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+	/*
 	if(tracked != 0)
 		seleleton_view.draw(&joints[0]);
+    */
 
 	{
 		std::lock_guard<std::mutex> guard(gui_mutex);
@@ -644,11 +646,11 @@ void up_my_style(std::vector<unsigned char>& frame)
 	{
 		std::vector<std::shared_ptr<product_button_t>> new_product_buttons;
 
-		double b_width = 6;
-		double b_height = 6;
+		double b_width = 5.82;
+		double b_height = 5.82;
 		double b_space = 0.5;
 		double b_left_x = screen_t::width_cm - b_width - b_space;
-		double b_top_y = 7;
+		double b_top_y = 1;
 		
 		double space_left = screen_t::height_cm - b_top_y;
 		int total_buttons = int(space_left / (b_height + b_space)) + 1;
@@ -796,26 +798,27 @@ int main(int argc, char* argv[]) {
 
 
 	// in cm
+//	double b_width = 15;
 	double b_width = 11;
-	double b_height = 5;
+	double b_height = 8;
 	double b_space = 1;
-	double b_left_x = screen_t::width_cm - b_width - b_space / 2;
-	double b_top_y = b_space;
+	double b_left_x = screen_t::width_cm / 2 - b_width / 2;
+	double b_top_y = 1;
 
-	auto b = std::make_shared<button_t>(b_left_x, b_top_y, b_width, b_height, &on_up_my_style_clicked, "Up My Style!");
+	auto b = std::make_shared<button_t>(b_left_x, b_top_y, b_width, b_height, &on_up_my_style_clicked, "Up My Style!", 200);
 
 	buttons.insert(b);
 	clickables.insert(b);
 
-	double top_y = b_space + b_height + b_space;
+	double top_y = 9;
 	double left_x = screen_t::width_cm - 11.5;
 
 	double udb_width = 4.5;
 	double udb_height = 4;
 
-	button_prev = std::make_shared<up_down_button_t>(left_x, top_y, udb_width, udb_height, &on_prev_clicked, false);
+	button_prev = std::make_shared<up_down_button_t>(left_x, top_y, udb_width, udb_height, &on_prev_clicked, false, 200);
 	top_y += 0.5 + udb_height;
-	button_next = std::make_shared<up_down_button_t>(left_x, top_y, udb_width, udb_height, &on_next_clicked, true);
+	button_next = std::make_shared<up_down_button_t>(left_x, top_y, udb_width, udb_height, &on_next_clicked, true, 200);
 
 	glutKeyboardFunc(key_pressed);
 

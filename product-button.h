@@ -35,7 +35,7 @@ struct product_button_t : public button_t {
 	int image_x, image_y, image_width, image_height;
 
 	product_button_t(float x_pos_f, float y_pos_f, float width_f, float size_ratio, std::function<void()> on_click, const std::string& url)
-		: button_t(x_pos_f, y_pos_f, width_f, size_ratio, on_click, "")
+		: button_t(x_pos_f, y_pos_f, width_f, size_ratio, on_click, "", 10)
 	{
 
 		this->url = url;

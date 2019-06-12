@@ -22,8 +22,8 @@ struct up_down_button_t : public button_t {
 
 	bool down;
 
-	up_down_button_t(float x_pos_f, float y_pos_f, float width_f, float size_ratio, std::function<void()> on_click, bool down)
-		: button_t(x_pos_f, y_pos_f, width_f, size_ratio, on_click, "")
+	up_down_button_t(float x_pos_f, float y_pos_f, float width_f, float size_ratio, std::function<void()> on_click, bool down, int radius)
+		: button_t(x_pos_f, y_pos_f, width_f, size_ratio, on_click, "", radius)
 	{
 		this->down = down;
 
