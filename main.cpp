@@ -46,6 +46,9 @@
 #include <functional>
 #include <memory>
 #include <set>
+#include <cmath>
+#include <deque>
+#include <type_traits>
 
 #include "kinect-utils.h"
 #include "skeleton-view.h"
@@ -154,14 +157,37 @@ std::mutex frame_mutex;
 
 std::mutex gui_mutex;
 
+struct gui_t
+{
 
-std::set<std::shared_ptr<clickable_t> > clickables;
-std::set<std::shared_ptr<button_t> > buttons;
+	std::set<std::shared_ptr<clickable_t> > clickables;
+	std::set<std::shared_ptr<button_t> > buttons;
+
+	void add(const std::shared_ptr<button_t>& b) {
+		buttons.insert(b);
+		clickables.insert(b);
+	}
+
+	void remove(const std::shared_ptr<button_t>& b) {
+		buttons.erase(b);
+		clickables.erase(b);
+	}
+	
+	/*
+	template<class container_t>
+	void add(container_t& c) {
+		for (auto& i : c)
+			add(i);
+	}
+	*/
+
+
+} gui;
 
 std::shared_ptr<up_down_button_t> button_next;
 std::shared_ptr<up_down_button_t> button_prev;
 
-std::vector<std::shared_ptr<product_button_t>> product_buttons;
+std::deque<std::shared_ptr<product_button_t>> product_buttons;
 
 enum state_t { s_idle, s_processing_photo, s_recommendations_view };
 
@@ -449,7 +475,18 @@ bool get_kinect_data(GLubyte* dest) {
 	return result;
 }
 
+enum products_scroll_state_t { pss_idle, pss_up, pss_down };
+
+volatile products_scroll_state_t products_scroll_state;
+
+std::chrono::time_point<std::chrono::steady_clock> product_scroll_start;
 std::chrono::time_point<std::chrono::steady_clock> processing_photo_start;
+
+double top_product_button_pos_y_f;
+
+double product_button_height = 5.82;
+double product_button_space = 0.5;
+double product_buttons_top_y = 1.0;
 
 void draw_kinect_data() {
 
@@ -466,21 +503,25 @@ void draw_kinect_data() {
 			std::copy(frame.begin(), frame.end(), last_frame.begin());
 		}
 		
-		
-		detect_press();
-
-		if (press_detected)
+		if (products_scroll_state == pss_idle)
 		{
-			std::lock_guard<std::mutex> guard(gui_mutex);
 
-			for (auto &c : clickables) {
-				bool r = c->check_click(cursor_x, cursor_y);
-				if (r)
-					break;
+			detect_press();
+
+			if (press_detected)
+			{
+				std::lock_guard<std::mutex> guard(gui_mutex);
+
+				for (auto &c : gui.clickables) {
+					bool r = c->check_click(cursor_x, cursor_y);
+					if (r)
+						break;
+				}
+
 			}
 
 		}
-		
+
 	}
 
 	//rgb8_image_t square100x100(100, 100);
@@ -505,10 +546,62 @@ void draw_kinect_data() {
 		seleleton_view.draw(&joints[0]);
     */
 
+	// product scroll
+
+	if (products_scroll_state != pss_idle)
+	{
+
+		auto passed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - product_scroll_start);
+
+		double transition_duration = 0.5; // s
+
+		double passed_s = std::min(passed_ms.count() / 1000., transition_duration);
+
+		double way_passed = (std::cos(0) - std::cos(3.14 * passed_s / transition_duration)) / 2;
+
+		double total_way = product_button_height + product_button_space;
+
+		double delta = total_way * way_passed;
+
+		if (products_scroll_state == pss_down)
+			delta *= -1;
+
+		double y = top_product_button_pos_y_f;
+
+		for (auto& pb : product_buttons)
+		{
+			pb->y_pos = (y + delta) * screen_t::dpc_y;
+			y += product_button_height + product_button_space;
+		}
+
+		if (passed_s >= transition_duration)
+		{
+
+			std::lock_guard<std::mutex> guard(gui_mutex);
+
+			{
+				if (products_scroll_state == pss_down)
+				{
+					gui.remove(product_buttons.front());
+					product_buttons.pop_front();
+				}
+				else
+				{
+					gui.remove(product_buttons.back());
+					product_buttons.pop_back();
+				}
+			}
+
+			products_scroll_state = pss_idle;
+		}
+
+	}
+
+
 	{
 		std::lock_guard<std::mutex> guard(gui_mutex);
 
-		for (auto &b : buttons) {
+		for (auto &b : gui.buttons) {
 			b->check_highlighted(cursor_x, cursor_y);
 			b->draw(canvas);
 		}
@@ -635,7 +728,7 @@ void on_product_clicked()
 
 
 recommendations_t recommendation;
-int viewed_items_start = 0;
+volatile int viewed_items_start = 0;
 
 void up_my_style(std::vector<unsigned char>& frame)
 {
@@ -644,16 +737,16 @@ void up_my_style(std::vector<unsigned char>& frame)
 	recommendation = get_recommendations(detection, 0, 20);
 
 	{
-		std::vector<std::shared_ptr<product_button_t>> new_product_buttons;
+		std::deque<std::shared_ptr<product_button_t>> new_product_buttons;
 
 		double b_width = 5.82;
-		double b_height = 5.82;
-		double b_space = 0.5;
+		double b_height = product_button_height;
+		double b_space = product_button_space;
 		double b_left_x = screen_t::width_cm - b_width - b_space;
-		double b_top_y = 1;
+		double b_top_y = product_buttons_top_y;
 		
 		double space_left = screen_t::height_cm - b_top_y;
-		int total_buttons = int(space_left / (b_height + b_space)) + 1;
+		int total_buttons = int(space_left / (b_height + b_space) + 0.5);
 
 		int max_i = std::min(recommendation.items.size() - viewed_items_start, std::size_t(total_buttons));
 
@@ -668,17 +761,16 @@ void up_my_style(std::vector<unsigned char>& frame)
 
 		std::lock_guard<std::mutex> guard(gui_mutex);
 		state = s_recommendations_view;
-		buttons.insert(button_prev);
-		buttons.insert(button_next);
+		gui.add(button_prev);
+		gui.add(button_next);
 		for (auto& pb : product_buttons) {
-			buttons.erase(pb);
-			clickables.erase(pb);
+			gui.remove(pb);
 		}
 
-		buttons.insert(new_product_buttons.begin(), new_product_buttons.end());
-		clickables.insert(button_prev);
-		clickables.insert(button_next);
-		clickables.insert(new_product_buttons.begin(), new_product_buttons.end());
+		for (auto& pb : new_product_buttons)
+			gui.add(pb);
+
+		//gui.add(new_product_buttons);
 
 		product_buttons = new_product_buttons;
 
@@ -711,12 +803,88 @@ void on_up_my_style_clicked()
 
 }
 
+void initiate_scroll(products_scroll_state_t pss) {
+
+	auto& items = recommendation.items;
+
+	if (pss == pss_up)
+	{
+		viewed_items_start -= 1;
+	}
+	else
+	{
+		viewed_items_start += 1;
+	}
+
+	auto& item = recommendation.items[viewed_items_start];
+
+	double b_height = product_button_height;
+	double b_width = b_height;
+	double b_space = product_button_space;
+	double b_left_x = screen_t::width_cm - b_width - b_space;
+
+	double b_top_y;
+
+	if (pss == pss_up)
+	{
+		b_top_y = product_buttons_top_y - b_height - b_space;
+	}
+	else
+	{
+		b_top_y = product_buttons_top_y + product_buttons.size() * (b_height + b_space) + b_space;
+	}
+
+	auto pb = std::make_shared<product_button_t>(b_left_x, b_top_y, b_width, b_height, &on_product_clicked, item.picture_url);
+
+	{
+		std::lock_guard<std::mutex> guard(gui_mutex);
+
+		if (pss == pss_up)
+		{
+			product_buttons.push_front(pb);
+			top_product_button_pos_y_f = product_buttons.front()->y_pos_f;
+		}
+		else
+		{
+			top_product_button_pos_y_f = product_buttons_top_y;
+			product_buttons.push_back(pb);
+		}
+
+		gui.add(pb);
+	}
+
+	product_scroll_start = std::chrono::steady_clock::now();
+	products_scroll_state = pss;
+
+
+}
+
+std::thread initiate_scroll_thread;
+
 void on_prev_clicked()
 {
+
+	if (viewed_items_start == 0)
+		return;
+
+	if (initiate_scroll_thread.joinable())
+		initiate_scroll_thread.join();
+	initiate_scroll_thread = std::thread(&initiate_scroll, pss_up);
+
 }
 
 void on_next_clicked()
 {
+
+	auto& items = recommendation.items;
+
+	if (viewed_items_start + product_buttons.size() >= items.size())
+		return;
+
+	if (initiate_scroll_thread.joinable())
+		initiate_scroll_thread.join();
+	initiate_scroll_thread = std::thread(&initiate_scroll, pss_down);
+
 }
 
 bool fullscreen = true;
@@ -726,6 +894,14 @@ void key_pressed(unsigned char key, int x, int y) {
 	if (key == 'u')
 	{
 		on_up_my_style_clicked();
+		return;
+	} else if (key == 'n')
+	{
+		on_next_clicked();
+		return;
+	} else if (key == 'p')
+	{
+		on_prev_clicked();
 		return;
 	}
 
@@ -807,8 +983,7 @@ int main(int argc, char* argv[]) {
 
 	auto b = std::make_shared<button_t>(b_left_x, b_top_y, b_width, b_height, &on_up_my_style_clicked, "Up My Style!", 200);
 
-	buttons.insert(b);
-	clickables.insert(b);
+	gui.add(b);
 
 	double top_y = 9;
 	double left_x = screen_t::width_cm - 11.5;
