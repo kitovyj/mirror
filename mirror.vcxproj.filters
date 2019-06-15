@@ -38,6 +38,9 @@
     <ClCompile Include="screen.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="detect-press.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
@@ -86,6 +89,9 @@
       <Filter>Source Files</Filter>
     </ClInclude>
     <ClInclude Include="common\latch.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="detect-press.h">
       <Filter>Source Files</Filter>
     </ClInclude>
   </ItemGroup>

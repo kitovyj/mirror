@@ -58,6 +58,7 @@
 #include "product-button.h"
 #include "up-down-button.h"
 #include "product-details-view.h"
+#include "detect-press.h"
 
 #include "classifier.h"
 #include "recommendation.h"
@@ -84,11 +85,9 @@ typedef agg::renderer_base<pixfmt> renderer_base;
 typedef agg::renderer_scanline_aa_solid<renderer_base> renderer_solid;
 typedef agg::renderer_scanline_bin_solid<renderer_base> renderer_bin;
 
-
 agg::rendering_buffer rendering_buffer(&data[0], screen_t::width, screen_t::height, screen_t::width * bytes_per_pixel);
 pixfmt pixf(rendering_buffer);
 renderer_base rb(pixf);
-
 
 canvas_t::pixfmt_pre pixf_pre(rendering_buffer);
 canvas_t::ren_base_pre rb_pre(pixf_pre);
@@ -103,19 +102,21 @@ canvas_t canvas(rb, rb_pre, gil_view, rendering_buffer);
 
 //auto screen_view = boost::gil::interleaved_view(rb.ren().width(), rb.ren().height(), reinterpret_cast<boost::gil::bgra8_pixel_t*>(rp), rb.ren().width() * bytes_per_pixel);
 
-
-
-
 cv::Mat data_opencv;
 cv::Mat last_frame_window_opencv;
 
+// Body tracking variables
+BOOLEAN tracked;							// Whether we see a body
+Joint joints[JointType_Count];				// List of joints in the tracked body
+
+int camera_x;
+int camera_y;
+
+int camera_width;
+int camera_height;
+
 void init_resize_matrices()
 {
-
-	int camera_x;
-	int camera_y;
-	int camera_width;
-	int camera_height;
 
 	if (screen_t::width < screen_t::height)
 	{
@@ -143,10 +144,62 @@ void init_resize_matrices()
 
 }
 
+std::pair<float, float> joint_screen_pos(Joint& j) {
 
-// Body tracking variables
-BOOLEAN tracked;							// Whether we see a body
-Joint joints[JointType_Count];				// List of joints in the tracked body
+	auto p = kinect.joint_screen_pos(j);
+
+	p.first = ((p.first - camera_x) * screen_t::width) / camera_width;
+	p.second = ((p.second - camera_y) * screen_t::height) / camera_height;
+
+	return p;
+}
+
+struct body_rect_t
+{
+	int min_x, min_y, max_x, max_y;
+};
+
+
+
+body_rect_t get_body_rect() {
+
+	int min_x, min_y, max_x, max_y;
+
+	min_x = screen_t::width;
+	min_y = screen_t::height;
+
+	max_x = max_y = 0;
+
+	for (int i = 0;i < JointType_Count;i++)
+	{
+
+		if (joints[i].TrackingState == TrackingState_NotTracked)
+			continue;
+
+		auto p = joint_screen_pos(joints[i]);
+
+		if (p.first > max_x)
+			max_x = p.first;
+		if (p.second > max_y)
+			max_y = p.second;
+
+		if (p.first < min_x)
+			min_x = p.first;
+		if (p.second < min_y)
+			min_y = p.second;
+
+	}
+
+	body_rect_t br;
+
+	br.min_x = min_x;
+	br.min_y = min_y;
+	br.max_x = max_x;
+	br.max_y = max_y;
+
+	return br;
+
+}
 
 skeleton_view_t seleleton_view(&data[0], screen_t::width, screen_t::height, kinect);
 
@@ -189,6 +242,8 @@ struct gui_t
 
 std::shared_ptr<up_down_button_t> button_next;
 std::shared_ptr<up_down_button_t> button_prev;
+std::shared_ptr<button_t> up_your_style_button;
+
 
 std::deque<std::shared_ptr<product_button_t>> product_buttons;
 
@@ -197,36 +252,6 @@ enum state_t { s_idle, s_processing_photo, s_recommendations_view };
 volatile state_t state = s_idle;
 
 volatile bool transition_animation = false;
-
-
-struct hand_tip_pos {
-
-	std::chrono::time_point<std::chrono::steady_clock> time_point;
-
-	double x;
-	double y;
-	double z;
-
-};
-
-struct hand_tip_pos_compare {
-
-	bool operator()(const hand_tip_pos& a, const hand_tip_pos& b) const
-	{
-		return a.time_point < b.time_point;
-	}
-
-	bool operator()(const std::chrono::time_point<std::chrono::steady_clock>& a, const hand_tip_pos& b) const
-	{
-		return a < b.time_point;
-	}
-
-	bool operator()(const hand_tip_pos& a, const std::chrono::time_point<std::chrono::steady_clock>& b) const
-	{
-		return a.time_point < b;
-	}
-
-};
 
 float Scale(int maxPixel, float maxSkeleton, float position)
 {
@@ -295,120 +320,9 @@ void ScaleXY(Joint shoulderCenter, bool rightHand, Joint joint, float& scaledX, 
 }
 
 
-std::vector<hand_tip_pos> hand_tip_trajectory;
 volatile bool press_detected = false;
 
 std::chrono::time_point<std::chrono::steady_clock> last_detected_press_time;
-
-void detect_press()
-{
-
-
-	Joint handLeft = joints[JointType_HandTipLeft];
-	Joint handRight = joints[JointType_HandTipRight];
-
-	if (handLeft.TrackingState == TrackingState_NotTracked || handRight.TrackingState == TrackingState_NotTracked)
-		return;
-
-	// Select the hand that is closer to the sensor.
-	Joint activeHand = handRight.Position.Z <= handLeft.Position.Z ? handRight : handLeft;
-	bool right_hand = handRight.Position.Z <= handLeft.Position.Z;
-	Joint scaled_active_hand = ScaleTo(activeHand, screen_t::width, screen_t::height);
-
-	static const int cDepthWidth = 512;
-	static const int cDepthHeight = 424;
-
-	DepthSpacePoint depthPoint = { 0 };
-	/*
-	kinect.mapper->MapCameraPointToDepthSpace(scaled_active_hand.Position, &depthPoint);
-
-	cursor_x = static_cast<float>(depthPoint.X * width) / cDepthWidth;
-	cursor_y = static_cast<float>(depthPoint.Y * height) / cDepthHeight;
-
-	*/
-
-	//cursor_x = scaled_active_hand.Position.X;
-	//cursor_y = scaled_active_hand.Position.Y;
-
-	ScaleXY(joints[JointType_SpineShoulder], right_hand, activeHand, cursor_x, cursor_y);
-
-
-	auto passed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - last_detected_press_time);
-	double passed_s = passed_ms.count() / 1000.;
-	if (passed_s < 1.0)
-		return;
-
-	kinect.mapper->MapCameraPointToDepthSpace(activeHand.Position, &depthPoint);
-
-	hand_tip_x = static_cast<float>(depthPoint.X * kinect_t::width) / cDepthWidth;
-	hand_tip_y = static_cast<float>(depthPoint.Y * kinect_t::height) / cDepthHeight;
-
-	hand_tip_pos p;
-
-	p.x = activeHand.Position.X;
-	p.y = activeHand.Position.Y;
-	p.z = activeHand.Position.Z;
-
-	p.time_point = std::chrono::steady_clock::now();
-
-	hand_tip_trajectory.push_back(p);
-
-	std::chrono::steady_clock::duration two_seconds = std::chrono::milliseconds(2000);
-	std::chrono::time_point<std::chrono::steady_clock> old_tp = p.time_point - two_seconds;
-
-	auto old = std::lower_bound(hand_tip_trajectory.begin(), hand_tip_trajectory.end(), old_tp, hand_tip_pos_compare());
-
-	hand_tip_trajectory.erase(hand_tip_trajectory.begin(), old);
-
-
-	std::chrono::steady_clock::duration jesture_start_min = std::chrono::milliseconds(500);
-	std::chrono::steady_clock::duration jesture_start_max = std::chrono::milliseconds(100);
-
-	std::chrono::time_point<std::chrono::steady_clock> earliest = p.time_point - jesture_start_min;
-	std::chrono::time_point<std::chrono::steady_clock> latest = p.time_point - jesture_start_max;
-
-	auto lower = std::lower_bound(hand_tip_trajectory.begin(), hand_tip_trajectory.end(), earliest, hand_tip_pos_compare());
-	auto upper = std::lower_bound(hand_tip_trajectory.begin(), hand_tip_trajectory.end(), latest, hand_tip_pos_compare());
-
-	double min_distance = 100;
-	std::vector<hand_tip_pos>::iterator start = hand_tip_trajectory.end();
-
-
-	for (auto i = lower;i < upper;i++)
-	{
-		double d = sqrt(pow(p.x - i->x, 2) + pow(p.y - i->y, 2) + pow(p.z - i->z, 2));
-		if (d < min_distance)
-		{
-			min_distance = d;
-			start = i;
-		}
-	}
-
-	if (min_distance <= 0.02)
-	{
-
-		double max_distance = 0;
-
-		for (auto i = start;i != hand_tip_trajectory.end();i++)
-		{
-			double d = sqrt(pow(p.x - i->x, 2) + pow(p.y - i->y, 2) + pow(p.z - i->z, 2));
-			if (d > max_distance && i->y < p.y)
-			{
-				max_distance = d;
-			}
-
-		}
-
-		// in meters!
-
-		if (max_distance > 0.02)
-		{
-			press_detected = true;
-		}
-
-	}
-
-}
 
 Sample::FilterDoubleExponential filter;
 
@@ -501,6 +415,9 @@ double product_button_height = 5.82;
 double product_button_space = 0.5;
 double product_buttons_top_y = 1.0;
 
+bool body_capture_animation_done = false;
+body_rect_t captured_body_rect;
+
 void draw_kinect_data() {
 
 	press_detected = false;
@@ -516,38 +433,89 @@ void draw_kinect_data() {
 			std::copy(frame.begin(), frame.end(), last_frame.begin());
 		}
 		
-		if (!transition_animation)
+
+		if (tracked)
 		{
 
-			detect_press();
+			Joint handLeft = joints[JointType_HandTipLeft];
+			Joint handRight = joints[JointType_HandTipRight];
 
+			if (handLeft.TrackingState == TrackingState_NotTracked || handRight.TrackingState == TrackingState_NotTracked)
+				return;
+
+			// Select the hand that is closer to the sensor.
+			Joint activeHand = handRight.Position.Z <= handLeft.Position.Z ? handRight : handLeft;
+			bool right_hand = handRight.Position.Z <= handLeft.Position.Z;
+			Joint scaled_active_hand = ScaleTo(activeHand, screen_t::width, screen_t::height);
+
+
+			DepthSpacePoint depthPoint = { 0 };
+
+			kinect.mapper->MapCameraPointToDepthSpace(activeHand.Position, &depthPoint);
+
+			static const int cDepthWidth = 512;
+			static const int cDepthHeight = 424;
+
+			auto hand_tip_x = static_cast<float>(depthPoint.X * kinect_t::width) / cDepthWidth;
+			auto hand_tip_y = static_cast<float>(depthPoint.Y * kinect_t::height) / cDepthHeight;
+
+			//static const int cDepthWidth = 512;
+			//static const int cDepthHeight = 424;
+
+			//DepthSpacePoint depthPoint = { 0 };
+			/*
+			kinect.mapper->MapCameraPointToDepthSpace(scaled_active_hand.Position, &depthPoint);
+
+			cursor_x = static_cast<float>(depthPoint.X * width) / cDepthWidth;
+			cursor_y = static_cast<float>(depthPoint.Y * height) / cDepthHeight;
+
+			*/
+
+			//cursor_x = scaled_active_hand.Position.X;
+			//cursor_y = scaled_active_hand.Position.Y;
+
+			ScaleXY(joints[JointType_SpineShoulder], right_hand, activeHand, cursor_x, cursor_y);
+
+			press_detected = detect_press(kinect, activeHand);
+
+			if (!transition_animation)
 			{
-				std::lock_guard<std::mutex> guard(gui_mutex);
 
 
-				// on click events may modify gui lists
+				auto passed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - last_detected_press_time);
+				double passed_s = passed_ms.count() / 1000.;
+				if (passed_s < 1.0)
+					press_detected = false;
 
-				auto clickables = gui.clickables;
-				bool click_processed = false;
+				{
+					std::lock_guard<std::mutex> guard(gui_mutex);
 
 
-				for (auto &c : clickables) {
+					// on click events may modify gui lists
 
-					if (!c->enabled)
-						continue;
+					auto clickables = gui.clickables;
+					bool click_processed = false;
 
-					if (press_detected && !click_processed) {
-						r = c->check_click(cursor_x, cursor_y);
-						click_processed |= r;
+
+					for (auto &c : clickables) {
+
+						if (!c->enabled)
+							continue;
+
+						if (press_detected && !click_processed) {
+							r = c->check_click(cursor_x, cursor_y);
+							click_processed |= r;
+						}
+						c->check_hover(cursor_x, cursor_y);
 					}
-					c->check_hover(cursor_x, cursor_y);
+
+					if (click_processed)
+						last_detected_press_time = std::chrono::steady_clock::now();
+
 				}
 
-				if(click_processed)
-					last_detected_press_time = std::chrono::steady_clock::now();
-
 			}
-	
+		
 		}
 
 	}
@@ -632,12 +600,23 @@ void draw_kinect_data() {
 	{
 		std::lock_guard<std::mutex> guard(gui_mutex);
 
+		bool uysb_visible = up_your_style_button->visible;
+		up_your_style_button->visible &= bool(tracked);
+
 		for (auto &b : gui.buttons) {
 			if (!b->visible)
 				continue;
 			b->check_highlighted(cursor_x, cursor_y);
 			b->draw(canvas);
 		}
+
+		up_your_style_button->visible = uysb_visible;
+
+	}
+	
+	if(tracked) {
+
+
 	}
 
 	/*
@@ -653,7 +632,7 @@ void draw_kinect_data() {
 		agg::render_scanlines_aa_solid(ras, sl, rb, color);
 	}*/
 
-	{
+	if (tracked) {
 
 		agg::ellipse ell;
 		int r = 30;
@@ -674,42 +653,125 @@ void draw_kinect_data() {
 	if (state == s_processing_photo)
 	{
 
-		auto passed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - processing_photo_start);
-
-		agg::rasterizer_scanline_aa<> ras;
-		agg::scanline_p8 sl;
-
-		double al = 3.14 / 2;
-		double ar = 300;
-
-		double as = passed_ms.count() * 0.01;
-
-		auto arc = agg::arc(screen_t::width/2, screen_t::height/2, ar, ar, as, as + al);
-
-		agg::conv_stroke<agg::arc> p(arc);
-		p.width(30.0);
-		ras.add_path(p);
-
-		auto color = agg::rgba(1.0, 1.0, 1.0, 0.8);
-		agg::render_scanlines_aa_solid(ras, sl, rb, color);
-		
-		if ((passed_ms.count() / 300) % 2 == 0)
+		if (!body_capture_animation_done)
 		{
 
-			ras.reset();
 
-			renderer_solid ren(rb);
-			renderer_bin ren_bin(rb);
+			auto passed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - processing_photo_start);
 
-			std::string text = "Styling you up...";
-			int text_height = 42;
+			double duration = 0.6; // s
 
-			auto sz = text_size(ras, sl, ren, ren_bin, text.c_str(), text_height);
+			double passed_s = std::min(passed_ms.count() / 1000., duration);
 
-			int x = screen_t::width / 2 - sz.first / 2;
-			int y = screen_t::height / 2 - sz.second / 2;
+			if (passed_s >= duration)
+			{
+				body_capture_animation_done = true;
+			}
 
-			draw_text(ras, sl, ren, ren_bin, x, y, agg::rgba(1.0, 1.0, 1.0, 7.0), text.c_str(), text_height);
+			double delta_cm = 0.5 + 1.5 * std::sin((3.14) * passed_s / duration);
+
+			//captured_body_rect
+
+			auto br = get_body_rect();
+			
+			//captured_body_rect;		
+			//get_body_rect();
+
+			int min_x, min_y, max_x, max_y;
+
+			min_x = br.min_x;
+			min_y = br.min_y;
+			max_x = br.max_x;
+			max_y = br.max_y;
+
+			min_y -= screen_t::dpc_y * 5;
+
+			max_y = std::min(max_y, int(screen_t::height - screen_t::dpc_y * 3));
+			max_x = std::min(max_x, int(screen_t::width - screen_t::dpc_x * 3));
+			min_y = std::max(min_y, int(screen_t::dpc_y * 3));
+			min_x = std::max(min_x, int(screen_t::dpc_x * 3));
+
+			int lx = screen_t::dpc_x * 1.5;
+			int ly = screen_t::dpc_y * 1.5;
+
+			int dx = screen_t::dpc_x * delta_cm;
+			int dy = screen_t::dpc_y * delta_cm;
+
+			min_x -= dx;
+			max_x += dx;
+			min_y -= dy;
+			max_y += dy;
+
+			agg::rasterizer_scanline_aa<> ras;
+			agg::scanline_p8 sl;
+			agg::path_storage path;
+
+			path.move_to(min_x, min_y + ly);
+			path.line_to(min_x, min_y);
+			path.line_to(min_x + lx, min_y);
+
+			path.move_to(max_x - lx, min_y);
+			path.line_to(max_x, min_y);
+			path.line_to(max_x, min_y + ly);
+
+			path.move_to(min_x, max_y - ly);
+			path.line_to(min_x, max_y);
+			path.line_to(min_x + lx, max_y);
+
+			path.move_to(max_x - lx, max_y);
+			path.line_to(max_x, max_y);
+			path.line_to(max_x, max_y - ly);
+
+			agg::conv_stroke<agg::path_storage> stroke(path);
+			//stroke.line_join(agg::round_join);
+			//stroke.line_cap(agg::round_cap);
+
+			stroke.width(10.0);
+			ras.add_path(stroke);
+
+			agg::render_scanlines_aa_solid(ras, sl, rb, agg::rgba8(255, 255, 255, 255));
+
+		}
+		else
+		{
+			auto passed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - processing_photo_start);
+
+			agg::rasterizer_scanline_aa<> ras;
+			agg::scanline_p8 sl;
+
+			double al = 3.14 / 2;
+			double ar = 300;
+
+			double as = passed_ms.count() * 0.01;
+
+			auto arc = agg::arc(screen_t::width / 2, screen_t::height / 2, ar, ar, as, as + al);
+
+			agg::conv_stroke<agg::arc> p(arc);
+			p.width(30.0);
+			ras.add_path(p);
+
+			auto color = agg::rgba(1.0, 1.0, 1.0, 0.8);
+			agg::render_scanlines_aa_solid(ras, sl, rb, color);
+
+			if ((passed_ms.count() / 300) % 2 == 0)
+			{
+
+				ras.reset();
+
+				renderer_solid ren(rb);
+				renderer_bin ren_bin(rb);
+
+				std::string text = "Styling you up...";
+				int text_height = 42;
+
+				auto sz = text_size(ras, sl, ren, ren_bin, text.c_str(), text_height);
+
+				int x = screen_t::width / 2 - sz.first / 2;
+				int y = screen_t::height / 2 - sz.second / 2;
+
+				draw_text(ras, sl, ren, ren_bin, x, y, agg::rgba(1.0, 1.0, 1.0, 7.0), text.c_str(), text_height);
+
+			}
 
 		}
 
@@ -867,6 +929,9 @@ void on_up_my_style_clicked()
 
 	up_my_style_audio.play_threaded();
 
+	captured_body_rect = get_body_rect();
+
+	body_capture_animation_done = false;
 	state = s_processing_photo;
 
 	std::vector<unsigned char> fc;
@@ -1084,9 +1149,9 @@ int main(int argc, char* argv[]) {
 	double b_left_x = screen_t::width_cm / 2 - b_width / 2;
 	double b_top_y = 1;
 
-	auto b = std::make_shared<button_t>(b_left_x, b_top_y, b_width, b_height, &on_up_my_style_clicked, "Up My Style!", 200, 0.15);
+	up_your_style_button = std::make_shared<button_t>(b_left_x, b_top_y, b_width, b_height, &on_up_my_style_clicked, "Up My Style!", 200, agg::rgba(1, 1, 1, 0.4));
 
-	gui.add(b);
+	gui.add(up_your_style_button);
 
 	double top_y = 9;
 	double left_x = screen_t::width_cm - 11.5;

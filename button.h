@@ -165,12 +165,15 @@ struct button_base_t : public clickable_t {
 	bool visible;
 	float opacity;
 
-	button_base_t(float x_pos_f, float y_pos_f, float width_f, float height_f, std::function<void()> on_click, const std::string& text, int radius = 20, float opacity = 0.05)
+	agg::rgba color;
+
+	button_base_t(float x_pos_f, float y_pos_f, float width_f, float height_f, std::function<void()> on_click, const std::string& text, int radius = 20, agg::rgba color = agg::rgba(1, 1, 1, 0.4))
 		: clickable_t(x_pos_f, y_pos_f, width_f, height_f, on_click)
 	{
 		visible = true;
 
 		this->radius = radius;
+		this->color = color;
 
 		highlighted = false;
 		this->text = text;
@@ -218,7 +221,7 @@ struct button_base_t : public clickable_t {
 			//ren.color(agg::rgba(1, 1, 1, 0.1));
 			//agg::render_scanlines_aa_solid(ras, sl, rb, agg::rgba(1.0, 1.0, 1.0, 0.1));
 			//agg::render_scanlines_aa_solid(ras, sl, rb, agg::rgba(0.0, 0.0, 0.0, 1.0));
-			agg::render_scanlines_aa_solid(ras, sl, rb, agg::rgba(0.0, 0.0, 0.0, opacity));
+			agg::render_scanlines_aa_solid(ras, sl, rb, this->color);
 
 			rendered_highlighted = rendered;
 
@@ -379,8 +382,8 @@ struct button_base_t : public clickable_t {
 
 struct button_t : button_base_t {
 
-	button_t(float x_pos_f, float y_pos_f, float width_f, float height_f, std::function<void()> on_click, const std::string& text, int radius = 20, float opacity = 0.05)
-		: button_base_t(x_pos_f, y_pos_f, width_f, height_f, on_click, text, radius, opacity)
+	button_t(float x_pos_f, float y_pos_f, float width_f, float height_f, std::function<void()> on_click, const std::string& text, int radius = 20, agg::rgba color = agg::rgba(1, 1, 1, 0.4))
+		: button_base_t(x_pos_f, y_pos_f, width_f, height_f, on_click, text, radius, color)
 	{
 		render();
 	}

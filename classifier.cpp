@@ -6,6 +6,14 @@
 #include <boost/property_tree/json_parser.hpp>
 #include <boost/gil/extension/io/png.hpp>
 #include <boost/gil/image_view_factory.hpp>
+#include <boost/gil.hpp>
+#include <boost/gil/extension/io/jpeg.hpp>
+#include <boost/gil/extension/io/png.hpp>
+#include <boost/gil/image_view_factory.hpp>
+#include <boost/gil/extension/numeric/sampler.hpp>
+#include <boost/gil/extension/numeric/resample.hpp>
+#include <boost/gil/image.hpp>
+#include <boost/gil/typedefs.hpp>
 
 #include <iostream>
 #include <vector>
@@ -35,7 +43,28 @@ items_detection_t classify_image(unsigned char* pdata, int width, int height)
 
 	auto view = boost::gil::interleaved_view(width, height, reinterpret_cast<const boost::gil::bgra8c_pixel_t*>(pdata), width * bytes_per_pixels);
 	
-	boost::gil::write_view(out_buffer, view, boost::gil::png_tag());
+	int max_pixels = (1920 * 1080) / 2;
+
+	if (width*height > max_pixels)
+	{
+
+		float k = float(width) / height;
+		float new_h = sqrt(max_pixels / k);
+		float new_w = k * new_h;
+
+		auto scaled_image = boost::gil::bgra8_image_t(new_w, new_h);
+
+		boost::gil::resize_view(view, boost::gil::view(scaled_image), boost::gil::bilinear_sampler());
+
+		boost::gil::write_view(out_buffer, boost::gil::view(scaled_image), boost::gil::png_tag());
+
+	}
+	else
+	{
+
+		boost::gil::write_view(out_buffer, view, boost::gil::png_tag());
+
+	}
 
 	std::string str = out_buffer.str();
 	std::vector<char> data(str.begin(), str.end());
@@ -231,6 +260,8 @@ items_detection_t classify_image(unsigned char* pdata, int width, int height)
 
 	id.top_color = colors[top_color_index];
 	id.bottom_color = colors[bottom_color_index];
+
+	std::cout << id.top_type << std::endl << id.bottom_type << std::endl << id.top_color << std::endl << id.bottom_color << std::endl;
 
 	return id;
 
