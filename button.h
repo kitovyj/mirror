@@ -37,6 +37,8 @@
 
 struct clickable_t {
 
+	bool enabled;
+
 	float x_pos_f = 0;
 	float y_pos_f = 0;
 	float width_f = 0.3;
@@ -53,6 +55,8 @@ struct clickable_t {
 
 	clickable_t(float x_pos_f, float y_pos_f, float width_f, float height_f, std::function<void()> on_click)
 	{
+
+		enabled = true;
 
 		this->x_pos_f = x_pos_f;
 		this->y_pos_f = y_pos_f;
@@ -84,6 +88,11 @@ struct clickable_t {
 		return true;
 	}
 
+	virtual bool check_hover(int x, int y)
+	{
+		return false;
+	}
+
 };
 
 struct canvas_t
@@ -113,7 +122,7 @@ struct canvas_t
 
 };
 
-struct button_t : public clickable_t {
+struct button_base_t : public clickable_t {
 
 	//typedef agg::pixfmt_bgra32_plain pixfmt;
 	//typedef agg::renderer_base<pixfmt> renderer_base;
@@ -153,14 +162,23 @@ struct button_t : public clickable_t {
 
 	int radius;
 
-	button_t(float x_pos_f, float y_pos_f, float width_f, float height_f, std::function<void()> on_click, const std::string& text, int radius = 20)
+	bool visible;
+	float opacity;
+
+	button_base_t(float x_pos_f, float y_pos_f, float width_f, float height_f, std::function<void()> on_click, const std::string& text, int radius = 20, float opacity = 0.05)
 		: clickable_t(x_pos_f, y_pos_f, width_f, height_f, on_click)
 	{
+		visible = true;
 
 		this->radius = radius;
 
 		highlighted = false;
 		this->text = text;
+		this->opacity = opacity;
+	}
+
+	virtual void render()
+	{
 
 		// normal
 
@@ -200,25 +218,11 @@ struct button_t : public clickable_t {
 			//ren.color(agg::rgba(1, 1, 1, 0.1));
 			//agg::render_scanlines_aa_solid(ras, sl, rb, agg::rgba(1.0, 1.0, 1.0, 0.1));
 			//agg::render_scanlines_aa_solid(ras, sl, rb, agg::rgba(0.0, 0.0, 0.0, 1.0));
-			agg::render_scanlines_aa_solid(ras, sl, rb, agg::rgba(1.0, 1.0, 1.0, 0.4));
+			agg::render_scanlines_aa_solid(ras, sl, rb, agg::rgba(0.0, 0.0, 0.0, opacity));
 
 			rendered_highlighted = rendered;
 
-			if (!text.empty()) {
-
-				int text_height = 50;
-				agg::rasterizer_scanline_aa<> ras;
-				agg::scanline_u8 sl;
-				renderer_solid ren(rb);
-				renderer_bin ren_bin(rb);
-
-				auto sz = text_size(ras, sl, ren, ren_bin, text.c_str(), text_height);
-
-				int x = /*x_pos*/dx + (width - sz.first) / 2;
-				int y = /*y_pos*/dy + (height - sz.second) / 2;
-
-				draw_text(ras, sl, ren, ren_bin, x, y, agg::rgba8(255, 255, 255, 255), text.c_str(), text_height);
-			}
+			render_content(rb, false);
 
 			ren_buf = rendering_buffer;
 
@@ -235,10 +239,14 @@ struct button_t : public clickable_t {
 
 			ren_base rb(pixf);
 
+			render_content(rb, true);
+
+
 			agg::rasterizer_scanline_aa<> ras;
 			agg::scanline_p8 sl;
 
 			//ras.reset();
+
 
 			int w = width;
 			int x = dx;//x_pos;
@@ -253,28 +261,36 @@ struct button_t : public clickable_t {
 			//ren.color(agg::rgba(1, 1, 1, 0.9));
 			agg::render_scanlines_aa_solid(ras, sl, rb, agg::rgba(1, 1, 1, 0.9));
 
-			if (!text.empty()) {
-
-				int text_height = 56;
-				agg::rasterizer_scanline_aa<> ras;
-				agg::scanline_u8 sl;
-				renderer_solid ren(rb);
-				renderer_bin ren_bin(rb);
-
-				auto sz = text_size(ras, sl, ren, ren_bin, text.c_str(), text_height);
-
-				int x = /*x_pos*/dx + (width - sz.first) / 2;
-				int y = /*y_pos*/dy + (height - sz.second) / 2;
-
-				draw_text(ras, sl, ren, ren_bin, x, y, agg::rgba8(255, 255, 255, 255), text.c_str(), text_height);
-			}
-
 			ren_buf_highlighted = rendering_buffer;
 
 			pixfmt_highlighted = pixfmt(ren_buf_highlighted);
 
 		}
 
+
+	}
+
+	virtual void render_content(prim_ren_base_type& rb, bool hl) {
+
+		typedef prim_ren_base_type ren_base;
+		typedef agg::renderer_scanline_aa_solid<ren_base> renderer_solid;
+		typedef agg::renderer_scanline_bin_solid<ren_base> renderer_bin;
+
+		if (!text.empty()) {
+
+			int text_height = hl ? 56 : 50;
+			agg::rasterizer_scanline_aa<> ras;
+			agg::scanline_u8 sl;
+			renderer_solid ren(rb);
+			renderer_bin ren_bin(rb);
+
+			auto sz = text_size(ras, sl, ren, ren_bin, text.c_str(), text_height);
+
+			int x = /*x_pos*/dx + (width - sz.first) / 2;
+			int y = /*y_pos*/dy + (height - sz.second) / 2;
+
+			draw_text(ras, sl, ren, ren_bin, x, y, agg::rgba8(255, 255, 255, 255), text.c_str(), text_height);
+		}
 
 	}
 
@@ -358,5 +374,15 @@ struct button_t : public clickable_t {
 		return highlighted;
 	}
 
+
+};
+
+struct button_t : button_base_t {
+
+	button_t(float x_pos_f, float y_pos_f, float width_f, float height_f, std::function<void()> on_click, const std::string& text, int radius = 20, float opacity = 0.05)
+		: button_base_t(x_pos_f, y_pos_f, width_f, height_f, on_click, text, radius, opacity)
+	{
+		render();
+	}
 
 };

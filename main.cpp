@@ -6,6 +6,7 @@
 #include <Windows.h>
 #include <Ole2.h>
 #include <shellscalingapi.h>
+#include <Mmsystem.h>
 
 #include <gl/GL.h>
 #include <gl/GLU.h>
@@ -50,11 +51,13 @@
 #include <deque>
 #include <type_traits>
 
+#include "audio.h"
 #include "kinect-utils.h"
 #include "skeleton-view.h"
 #include "button.h"
 #include "product-button.h"
 #include "up-down-button.h"
+#include "product-details-view.h"
 
 #include "classifier.h"
 #include "recommendation.h"
@@ -161,14 +164,14 @@ struct gui_t
 {
 
 	std::set<std::shared_ptr<clickable_t> > clickables;
-	std::set<std::shared_ptr<button_t> > buttons;
+	std::set<std::shared_ptr<button_base_t> > buttons;
 
-	void add(const std::shared_ptr<button_t>& b) {
+	void add(const std::shared_ptr<button_base_t>& b) {
 		buttons.insert(b);
 		clickables.insert(b);
 	}
 
-	void remove(const std::shared_ptr<button_t>& b) {
+	void remove(const std::shared_ptr<button_base_t>& b) {
 		buttons.erase(b);
 		clickables.erase(b);
 	}
@@ -192,6 +195,9 @@ std::deque<std::shared_ptr<product_button_t>> product_buttons;
 enum state_t { s_idle, s_processing_photo, s_recommendations_view };
 
 volatile state_t state = s_idle;
+
+volatile bool transition_animation = false;
+
 
 struct hand_tip_pos {
 
@@ -292,8 +298,11 @@ void ScaleXY(Joint shoulderCenter, bool rightHand, Joint joint, float& scaledX, 
 std::vector<hand_tip_pos> hand_tip_trajectory;
 volatile bool press_detected = false;
 
+std::chrono::time_point<std::chrono::steady_clock> last_detected_press_time;
+
 void detect_press()
 {
+
 
 	Joint handLeft = joints[JointType_HandTipLeft];
 	Joint handRight = joints[JointType_HandTipRight];
@@ -323,6 +332,11 @@ void detect_press()
 
 	ScaleXY(joints[JointType_SpineShoulder], right_hand, activeHand, cursor_x, cursor_y);
 
+
+	auto passed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - last_detected_press_time);
+	double passed_s = passed_ms.count() / 1000.;
+	if (passed_s < 1.0)
+		return;
 
 	kinect.mapper->MapCameraPointToDepthSpace(activeHand.Position, &depthPoint);
 
@@ -390,7 +404,6 @@ void detect_press()
 		if (max_distance > 0.02)
 		{
 			press_detected = true;
-
 		}
 
 	}
@@ -503,23 +516,38 @@ void draw_kinect_data() {
 			std::copy(frame.begin(), frame.end(), last_frame.begin());
 		}
 		
-		if (products_scroll_state == pss_idle)
+		if (!transition_animation)
 		{
 
 			detect_press();
 
-			if (press_detected)
 			{
 				std::lock_guard<std::mutex> guard(gui_mutex);
 
-				for (auto &c : gui.clickables) {
-					bool r = c->check_click(cursor_x, cursor_y);
-					if (r)
-						break;
+
+				// on click events may modify gui lists
+
+				auto clickables = gui.clickables;
+				bool click_processed = false;
+
+
+				for (auto &c : clickables) {
+
+					if (!c->enabled)
+						continue;
+
+					if (press_detected && !click_processed) {
+						r = c->check_click(cursor_x, cursor_y);
+						click_processed |= r;
+					}
+					c->check_hover(cursor_x, cursor_y);
 				}
 
-			}
+				if(click_processed)
+					last_detected_press_time = std::chrono::steady_clock::now();
 
+			}
+	
 		}
 
 	}
@@ -593,6 +621,9 @@ void draw_kinect_data() {
 			}
 
 			products_scroll_state = pss_idle;
+			transition_animation = false;
+
+
 		}
 
 	}
@@ -602,11 +633,14 @@ void draw_kinect_data() {
 		std::lock_guard<std::mutex> guard(gui_mutex);
 
 		for (auto &b : gui.buttons) {
+			if (!b->visible)
+				continue;
 			b->check_highlighted(cursor_x, cursor_y);
 			b->draw(canvas);
 		}
 	}
 
+	/*
 	{
 
 		agg::ellipse ell;
@@ -617,7 +651,7 @@ void draw_kinect_data() {
 		agg::scanline_p8 sl;
 		ras.add_path(ell);
 		agg::render_scanlines_aa_solid(ras, sl, rb, color);
-	}
+	}*/
 
 	{
 
@@ -720,15 +754,46 @@ void idle() {
 	glutPostRedisplay();
 }
 
-void on_product_clicked()
+std::shared_ptr < product_details_view_t > product_details_view;
+
+void on_product_details_view_click()
 {
 
+	//std::lock_guard<std::mutex> guard(gui_mutex);
+	gui.remove(product_details_view);
+	product_details_view.reset();
+
+}
+
+void on_product_clicked(const recommendations_t::item_t& item)
+{
+	if (product_details_view)
+	{
+		gui.remove(product_details_view);
+		product_details_view.reset();
+	}
+
+	double space = 1;
+
+	double v_width = screen_t::width_cm - product_button_height - space * 2 - product_button_space;
+	double v_height = v_width;
+
+	double v_x = space;
+	double v_y = screen_t::height_cm - v_height - space;
+
+	product_details_view = std::make_shared<product_details_view_t>
+		(v_x, v_y, v_width, v_height, &on_product_details_view_click, item);
+
+	//std::lock_guard<std::mutex> guard(gui_mutex);
+	gui.add(product_details_view);
 
 }
 
 
 recommendations_t recommendation;
 volatile int viewed_items_start = 0;
+
+audio_t up_my_style_audio("styleme.wav");
 
 void up_my_style(std::vector<unsigned char>& frame)
 {
@@ -754,12 +819,21 @@ void up_my_style(std::vector<unsigned char>& frame)
 		{
 				auto& item = recommendation.items[viewed_items_start + i];
 
-				auto pb = std::make_shared<product_button_t>(b_left_x, b_top_y, b_width, b_height, &on_product_clicked, item.picture_url);
+				std::function<void()> on_clicked = std::bind(&on_product_clicked, std::cref(item));
+
+				auto pb = std::make_shared<product_button_t>(b_left_x, b_top_y, b_width, b_height, on_clicked, item.picture_url);
 				new_product_buttons.push_back(pb);
 				b_top_y += b_height + b_space;
 		}
 
 		std::lock_guard<std::mutex> guard(gui_mutex);
+
+		if (product_details_view)
+		{
+			gui.remove(product_details_view);
+			product_details_view.reset();
+		}
+
 		state = s_recommendations_view;
 		gui.add(button_prev);
 		gui.add(button_next);
@@ -774,6 +848,11 @@ void up_my_style(std::vector<unsigned char>& frame)
 
 		product_buttons = new_product_buttons;
 
+		for (auto &b : gui.buttons) {
+			b->visible = true;
+			b->enabled = true;
+		}
+
 	}
 
 }
@@ -786,6 +865,8 @@ void on_up_my_style_clicked()
 	if (state == s_processing_photo)
 		return;
 
+	up_my_style_audio.play_threaded();
+
 	state = s_processing_photo;
 
 	std::vector<unsigned char> fc;
@@ -794,6 +875,17 @@ void on_up_my_style_clicked()
 		std::lock_guard<std::mutex> guard(frame_mutex);
 
 		fc = std::vector<unsigned char>(last_frame.begin(), last_frame.end());
+	}
+
+	{
+
+		//std::lock_guard<std::mutex> guard(gui_mutex);
+
+		for (auto &b : gui.buttons) {
+			b->visible = false;
+			b->enabled = false;
+		}
+
 	}
 
 	processing_photo_start = std::chrono::steady_clock::now();
@@ -807,16 +899,20 @@ void initiate_scroll(products_scroll_state_t pss) {
 
 	auto& items = recommendation.items;
 
+	int item_index;
+
 	if (pss == pss_up)
 	{
 		viewed_items_start -= 1;
+		item_index = viewed_items_start;
 	}
 	else
 	{
 		viewed_items_start += 1;
+		item_index = viewed_items_start + product_buttons.size() - 1;
 	}
 
-	auto& item = recommendation.items[viewed_items_start];
+	auto& item = recommendation.items[item_index];
 
 	double b_height = product_button_height;
 	double b_width = b_height;
@@ -834,7 +930,9 @@ void initiate_scroll(products_scroll_state_t pss) {
 		b_top_y = product_buttons_top_y + product_buttons.size() * (b_height + b_space) + b_space;
 	}
 
-	auto pb = std::make_shared<product_button_t>(b_left_x, b_top_y, b_width, b_height, &on_product_clicked, item.picture_url);
+	std::function<void()> on_clicked = std::bind(&on_product_clicked, std::cref(item));
+
+	auto pb = std::make_shared<product_button_t>(b_left_x, b_top_y, b_width, b_height, on_clicked, item.picture_url);
 
 	{
 		std::lock_guard<std::mutex> guard(gui_mutex);
@@ -866,6 +964,8 @@ void on_prev_clicked()
 
 	if (viewed_items_start == 0)
 		return;
+	
+	transition_animation = true;
 
 	if (initiate_scroll_thread.joinable())
 		initiate_scroll_thread.join();
@@ -880,6 +980,8 @@ void on_next_clicked()
 
 	if (viewed_items_start + product_buttons.size() >= items.size())
 		return;
+
+	transition_animation = true;
 
 	if (initiate_scroll_thread.joinable())
 		initiate_scroll_thread.join();
@@ -933,7 +1035,8 @@ bool init(int argc, char* argv[]) {
 }
 
 int main(int argc, char* argv[]) {
-   
+
+
 	HWND hwnd = GetForegroundWindow();
 
 	HMONITOR monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
@@ -981,7 +1084,7 @@ int main(int argc, char* argv[]) {
 	double b_left_x = screen_t::width_cm / 2 - b_width / 2;
 	double b_top_y = 1;
 
-	auto b = std::make_shared<button_t>(b_left_x, b_top_y, b_width, b_height, &on_up_my_style_clicked, "Up My Style!", 200);
+	auto b = std::make_shared<button_t>(b_left_x, b_top_y, b_width, b_height, &on_up_my_style_clicked, "Up My Style!", 200, 0.15);
 
 	gui.add(b);
 

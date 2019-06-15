@@ -76,5 +76,17 @@
     <ClInclude Include="up-down-button.h">
       <Filter>Source Files</Filter>
     </ClInclude>
+    <ClInclude Include="product-details-view.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="audio.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="thread_pool.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="common\latch.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

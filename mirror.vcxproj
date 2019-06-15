@@ -179,8 +179,11 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="agg_draw_text.h" />
+    <ClInclude Include="audio.h" />
     <ClInclude Include="button.h" />
     <ClInclude Include="classifier.h" />
+    <ClInclude Include="common\latch.h" />
+    <ClInclude Include="product-details-view.h" />
     <ClInclude Include="screen.h" />
     <ClInclude Include="http-get.h" />
     <ClInclude Include="kinect-utils.h" />
@@ -188,6 +191,7 @@
     <ClInclude Include="product-button.h" />
     <ClInclude Include="recommendation.h" />
     <ClInclude Include="skeleton-view.h" />
+    <ClInclude Include="thread_pool.h" />
     <ClInclude Include="up-down-button.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
@@ -210,6 +214,8 @@
     <Import Project="packages\curl-vc141-dynamic-x86_64.7.59.0\build\native\curl-vc141-dynamic-x86_64.targets" Condition="Exists('packages\curl-vc141-dynamic-x86_64.7.59.0\build\native\curl-vc141-dynamic-x86_64.targets')" />
     <Import Project="packages\zlib-msvc-x64.1.2.11.8900\build\native\zlib-msvc-x64.targets" Condition="Exists('packages\zlib-msvc-x64.1.2.11.8900\build\native\zlib-msvc-x64.targets')" />
     <Import Project="packages\libjpeg-msvc-x64.9.1.0.8807\build\native\libjpeg-msvc-x64.targets" Condition="Exists('packages\libjpeg-msvc-x64.9.1.0.8807\build\native\libjpeg-msvc-x64.targets')" />
+    <Import Project="packages\boost_thread-vc141.1.70.0.0\build\boost_thread-vc141.targets" Condition="Exists('packages\boost_thread-vc141.1.70.0.0\build\boost_thread-vc141.targets')" />
+    <Import Project="packages\boost_chrono-vc141.1.70.0.0\build\boost_chrono-vc141.targets" Condition="Exists('packages\boost_chrono-vc141.1.70.0.0\build\boost_chrono-vc141.targets')" />
   </ImportGroup>
   <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
     <PropertyGroup>
@@ -234,5 +240,7 @@
     <Error Condition="!Exists('packages\curl-vc141-dynamic-x86_64.7.59.0\build\native\curl-vc141-dynamic-x86_64.targets')" Text="$([System.String]::Format('$(ErrorText)', 'packages\curl-vc141-dynamic-x86_64.7.59.0\build\native\curl-vc141-dynamic-x86_64.targets'))" />
     <Error Condition="!Exists('packages\zlib-msvc-x64.1.2.11.8900\build\native\zlib-msvc-x64.targets')" Text="$([System.String]::Format('$(ErrorText)', 'packages\zlib-msvc-x64.1.2.11.8900\build\native\zlib-msvc-x64.targets'))" />
     <Error Condition="!Exists('packages\libjpeg-msvc-x64.9.1.0.8807\build\native\libjpeg-msvc-x64.targets')" Text="$([System.String]::Format('$(ErrorText)', 'packages\libjpeg-msvc-x64.9.1.0.8807\build\native\libjpeg-msvc-x64.targets'))" />
+    <Error Condition="!Exists('packages\boost_thread-vc141.1.70.0.0\build\boost_thread-vc141.targets')" Text="$([System.String]::Format('$(ErrorText)', 'packages\boost_thread-vc141.1.70.0.0\build\boost_thread-vc141.targets'))" />
+    <Error Condition="!Exists('packages\boost_chrono-vc141.1.70.0.0\build\boost_chrono-vc141.targets')" Text="$([System.String]::Format('$(ErrorText)', 'packages\boost_chrono-vc141.1.70.0.0\build\boost_chrono-vc141.targets'))" />
   </Target>
 </Project>
